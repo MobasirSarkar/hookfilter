@@ -1,0 +1,92 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "sql/queries"
+    schema: "sql/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "internal/database"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              type: "UUID"
+              import: "github.com/google/uuid" # Imports the package and uses alias 'uuid'
+          - db_type: "pg_catalog.uuid"
+            go_type:
+              type: "UUID"
+              import: "github.com/google/uuid"
+
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              type: "UUID"
+              import: "github.com/google/uuid"
+              pointer: true # THIS ensures *uuid.UUID is generated
+
+          - db_type: "pg_catalog.uuid"
+            nullable: true
+            go_type:
+              type: "UUID"
+              import: "github.com/google/uuid"
+              pointer: true # THIS ensures *uuid.UUID is generated
+
+          # --- Text Overrides ---
+          # Map TEXT type to string
+          - db_type: "text"
+            go_type: "string"
+          - db_type: "pg_catalog.text"
+            go_type: "string"
+          - db_type: "text"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true
+          - db_type: "pg_catalog.text"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true
+
+          # --- Timestamp Overrides (Non-Nullable) ---
+          # This maps non-nullable TIMESTAMPS to time.Time
+          - db_type: "pg_catalog.timestamp"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamp"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          
+          # --- Timestamp Overrides (Nullable) ---
+          # This maps nullable TIMESTAMPS to *time.Time
+          - db_type: "pg_catalog.timestamp"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+
+          # --- Specific Column Overrides ---
+          # Hide the password hash from JSON output
+          - column: "users.password"
+            go_struct_tag: 'json:"-"' 
+
+          # Example for a soft-delete column
+          - column: "users.deleted_at"
+            go_type:
+              type: "time.Time"
+              pointer: true
+            go_struct_tag: 'json:"deleted_at,omitempty"'
