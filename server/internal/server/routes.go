@@ -18,7 +18,14 @@ func (s *Server) MountRoutes(router chi.Router) http.Handler {
 	router.Use(chiM.Logger)
 	router.Use(chiM.Recoverer)
 	router.Use(chiM.RealIP)
-	router.Use(cors.AllowAll().Handler)
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-User-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 
 	// public / webhook routes
 	router.Get("/health", s.Health)
