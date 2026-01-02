@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MobasirSarkar/hookfilter/internal/middleware"
 	"github.com/MobasirSarkar/hookfilter/internal/service/auth"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
@@ -19,14 +20,14 @@ const (
 )
 
 type AuthHandler struct {
-	service  auth.IdentityService
+	Service  auth.IdentityService
 	provider auth.Provider
 	log      *logger.Logger
 }
 
 func NewAuthHandler(svc auth.IdentityService, provider auth.Provider, log *logger.Logger) *AuthHandler {
 	return &AuthHandler{
-		service:  svc,
+		Service:  svc,
 		provider: provider,
 		log:      log,
 	}
@@ -47,7 +48,7 @@ func (h *AuthHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.service.AddUser(r.Context(), auth.AddUserParams{
+	tokens, err := h.Service.AddUser(r.Context(), auth.AddUserParams{
 		Password: req.Password,
 		Email:    req.Email,
 		Username: req.Username,
@@ -103,7 +104,7 @@ func (h *AuthHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.service.ValidateUser(r.Context(), auth.LoginUserParams{
+	tokens, err := h.Service.ValidateUser(r.Context(), auth.LoginUserParams{
 		Email:    req.Email,
 		Password: req.Password,
 	})
@@ -164,108 +165,63 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	accessToken := r.Header.Get("authorization")
-	if accessToken == "" {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
-		return
-	}
-	cookie, err := r.Cookie(COOKIE_KEY)
-	if err != nil || cookie.Value == "" {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
-		return
+	// Try to revoke refresh token (best effort)
+	if cookie, err := r.Cookie(COOKIE_KEY); err == nil && cookie.Value != "" {
+		_ = h.Service.Logout(r.Context(), cookie.Value)
 	}
 
-	err = h.service.Logout(r.Context(), accessToken, cookie.Value)
-	if err != nil {
-		http.SetCookie(w, &http.Cookie{
-			Name:     COOKIE_KEY,
-			Value:    "",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			Path:     "/auth/google/callback",
-			MaxAge:   -1,
-		})
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
-		return
-	}
-
+	// Always delete cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     COOKIE_KEY,
 		Value:    "",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/google/callback",
+		Path:     "/auth/refresh", // MUST MATCH ORIGINAL
 		MaxAge:   -1,
 	})
 
+	response.Message(w, http.StatusOK, "logged out", &response.Metadata{
+		RequestID: uuid.NewString(),
+	})
 }
 
 func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
-	accessToken := r.Header.Get("authorization")
-	if accessToken == "" {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
-		return
-	}
-	cookie, err := r.Cookie(COOKIE_KEY)
-	if err != nil || cookie.Value == "" {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
 	}
 
-	claims, err := h.service.ValidateToken(r.Context(), accessToken)
+	id, err := uuid.Parse(userID)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
 	}
 
-	userId, err := uuid.Parse(claims.UserID)
-	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
+	if err := h.Service.LogoutAll(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, "logout failed", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
 	}
 
-	err = h.service.LogoutAll(r.Context(), userId)
-	if err != nil {
-		http.SetCookie(w, &http.Cookie{
-			Name:     COOKIE_KEY,
-			Value:    "",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			Path:     "/auth/google/callback",
-			MaxAge:   -1,
-		})
-		response.Error(w, http.StatusUnauthorized, "token invalid", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
-		return
-	}
+	// Delete refresh token cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     COOKIE_KEY,
 		Value:    "",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/google/callback",
+		Path:     "/auth/refresh",
 		MaxAge:   -1,
 	})
-	response.Message(w, http.StatusOK, "logout successfully", &response.Metadata{
+
+	response.Message(w, http.StatusOK, "logged out from all devices", &response.Metadata{
 		RequestID: uuid.NewString(),
 	})
 }
@@ -298,7 +254,7 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, isNewUser, err := h.service.ValidateOauthUser(r.Context(), auth.OauthUserParams{
+	tokens, isNewUser, err := h.Service.ValidateOauthUser(r.Context(), auth.OauthUserParams{
 		Email:      gUser.Email,
 		Username:   gUser.Name,
 		Provider:   auth.GOOGLE_ID_KEY,

@@ -7,6 +7,7 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/service/ingest"
 	"github.com/MobasirSarkar/hookfilter/internal/service/pipe"
 	"github.com/MobasirSarkar/hookfilter/internal/service/realtime"
+	"github.com/MobasirSarkar/hookfilter/internal/service/user"
 	"github.com/MobasirSarkar/hookfilter/pkg/config"
 	"github.com/MobasirSarkar/hookfilter/pkg/jwt"
 )
@@ -16,6 +17,7 @@ type Service struct {
 	RealtimeService realtime.IRealtime
 	PipeService     pipe.Piper
 	AuthService     auth.IdentityService
+	UserService     user.Service
 }
 
 func NewServicer(db db.Querier, cache cache.Cacher, cfg *config.Config) *Service {
@@ -23,12 +25,14 @@ func NewServicer(db db.Querier, cache cache.Cacher, cfg *config.Config) *Service
 	ingestService := ingest.NewIngestService(db, cache)
 	realtimeService := realtime.NewRealtimeService(cache)
 	pipeLineService := pipe.NewPipeService(db)
-	authService := auth.NewAuthService(db, jwtManager, cfg)
+	authService := auth.NewAuthService(db, jwtManager, cfg, cache)
+	userService := user.NewUserService(db, cfg)
 
 	return &Service{
 		PipeService:     pipeLineService,
 		IngestService:   ingestService,
 		RealtimeService: realtimeService,
 		AuthService:     authService,
+		UserService:     userService,
 	}
 }

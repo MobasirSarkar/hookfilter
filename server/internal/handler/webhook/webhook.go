@@ -2,13 +2,19 @@ package webhook
 
 import (
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
+	"github.com/MobasirSarkar/hookfilter/internal/service/auth"
 	"github.com/MobasirSarkar/hookfilter/internal/service/realtime"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
-	"github.com/MobasirSarkar/hookfilter/pkg/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	MAX_READ_BUFFER = 512
+	MAX_READ_LIMIT  = 60 * time.Second
 )
 
 var (
@@ -17,68 +23,85 @@ var (
 			return true
 		},
 	}
+
+	once sync.Once
 )
 
 type RealtimeHandler struct {
-	Service realtime.IRealtime
-	log     *logger.Logger
+	Service     realtime.IRealtime
+	authService auth.IdentityService
+	log         *logger.Logger
 }
 
-func NewRealtimeHandler(service realtime.IRealtime, logger *logger.Logger) *RealtimeHandler {
+func NewRealtimeHandler(service realtime.IRealtime, authServ auth.IdentityService, logger *logger.Logger) *RealtimeHandler {
 	return &RealtimeHandler{
-		Service: service,
-		log:     logger,
+		Service:     service,
+		authService: authServ,
+		log:         logger,
 	}
 }
 
 func (h *RealtimeHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		userID = r.URL.Query().Get("userID")
-	}
-	if userID == "" {
-		response.Error(w, http.StatusNotFound, "user ID required", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+	// 1. Extract token
+	token := extractToken(r)
+	if token == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	// 2. Validate token
+	claims, err := h.authService.ValidateToken(r.Context(), token)
 	if err != nil {
-		h.log.Errorf("[HANDLER] -> websocket error -> %v", err)
-		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+
+	// 3. Identity comes ONLY from JWT
+	userID := claims.UserID
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		h.log.Errorf("[HANDLER] -> websocket upgrade failed -> %v", err)
+		return
+	}
+	defer conn.Close()
 
 	msgs, closeSub, err := h.Service.SubscribeToUserEvents(r.Context(), userID)
 	if err != nil {
 		h.log.Errorf("[HANDLER] -> subscription failed -> %v", err)
 		return
 	}
-	defer closeSub()
+
+	safeClose := func() {
+		once.Do(closeSub)
+	}
+
+	conn.SetReadLimit(MAX_READ_BUFFER)
+	conn.SetReadDeadline(time.Now().Add(MAX_READ_LIMIT))
+	conn.SetPongHandler(func(appData string) error {
+		conn.SetReadDeadline(time.Now().Add(MAX_READ_LIMIT))
+		return nil
+	})
 
 	go func() {
+		defer safeClose()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
-				closeSub()
 				return
 			}
 		}
 	}()
-
-	for {
-		select {
-		case msg, ok := <-msgs:
-			if !ok {
-				return
-			}
-			if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
-				return
-			}
-		case <-r.Context().Done():
+	for msg := range msgs {
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
 			return
 		}
 	}
+}
+
+func extractToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimPrefix(auth, "Bearer ")
+	}
+	return r.URL.Query().Get("token")
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/handler/auth"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/ingest"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/pipe"
+	"github.com/MobasirSarkar/hookfilter/internal/handler/user"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/webhook"
 	"github.com/MobasirSarkar/hookfilter/internal/service"
 	gp "github.com/MobasirSarkar/hookfilter/internal/service/auth"
@@ -24,6 +25,7 @@ type Dependency struct {
 	IngestHandler  *ingest.IngestHandler
 	WebhookHandler *webhook.RealtimeHandler
 	AuthHandler    *auth.AuthHandler
+	UserHandler    *user.UserHandler
 	Worker         *worker.Runner
 }
 
@@ -56,10 +58,12 @@ func NewDependency(ctx context.Context) (*Dependency, error) {
 	pipeHandler := pipe.NewPipeHandler(servicer.PipeService, logger)
 
 	ingestHandler := ingest.NewIngestHandler(servicer.IngestService, logger)
-	webhookHandler := webhook.NewRealtimeHandler(servicer.RealtimeService, logger)
+	webhookHandler := webhook.NewRealtimeHandler(servicer.RealtimeService, servicer.AuthService, logger)
 
 	googleProvider := gp.NewGoogleProvider(cfg)
 	authHandler := auth.NewAuthHandler(servicer.AuthService, googleProvider, logger)
+
+	userHandler := user.NewUserHandler(servicer.UserService)
 
 	workerRunner := worker.NewRunner(cache, querier, 5, logger)
 
@@ -70,6 +74,7 @@ func NewDependency(ctx context.Context) (*Dependency, error) {
 		PipeHandler:    pipeHandler,
 		IngestHandler:  ingestHandler,
 		AuthHandler:    authHandler,
+		UserHandler:    userHandler,
 		Worker:         workerRunner,
 	}, nil
 }

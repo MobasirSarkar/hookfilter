@@ -3,8 +3,10 @@ package auth
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
+	"github.com/MobasirSarkar/hookfilter/internal/cache"
 	db "github.com/MobasirSarkar/hookfilter/internal/database"
 	"github.com/MobasirSarkar/hookfilter/pkg/config"
 	"github.com/MobasirSarkar/hookfilter/pkg/jwt"
@@ -13,6 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"golang.org/x/sync/singleflight"
+)
+
+const (
+	CACHE_KEY = "auth:token_version:"
 )
 
 type IdentityService interface {
@@ -20,25 +27,28 @@ type IdentityService interface {
 	ValidateUser(ctx context.Context, params LoginUserParams) (*Tokens, error)
 	ValidateOauthUser(ctx context.Context, params OauthUserParams) (*Tokens, bool, error)
 	RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, error)
-	Logout(ctx context.Context, accessToken, refreshToken string) error
+	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, userID uuid.UUID) error
 	ValidateToken(ctx context.Context, tokenStr string) (*jwt.Claims, error)
 }
 
 type AuthService struct {
+	cache      cache.Cacher
 	querier    db.Querier
 	jwtManager jwt.Manager
 	config     *config.Config
 	log        *logger.Logger
+	sf         singleflight.Group
 }
 
-func NewAuthService(querier db.Querier, jwtManager jwt.Manager, cfg *config.Config) *AuthService {
+func NewAuthService(querier db.Querier, jwtManager jwt.Manager, cfg *config.Config, cache cache.Cacher) *AuthService {
 	log := logger.NewLogger(cfg)
 	return &AuthService{
 		querier:    querier,
 		jwtManager: jwtManager,
 		config:     cfg,
 		log:        log,
+		cache:      cache,
 	}
 }
 
@@ -52,17 +62,14 @@ func (s *AuthService) AddUser(ctx context.Context, params AddUserParams) (*Token
 		Password: &hash,
 		Email:    params.Email,
 	})
-	if err == nil {
-		return &Tokens{}, nil
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstCode {
+			return nil, ErrUserAlreadyExists
+		}
+		return nil, err
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		if pgErr.Code == UniqueConstCode {
-			return &Tokens{}, ErrUserAlreadyExists
-		}
-		return &Tokens{}, err
-	}
 	access, refresh, err := s.issueTokens(ctx, user)
 	if err != nil {
 		return &Tokens{}, err
@@ -164,7 +171,7 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 	return s.issueTokens(ctx, user)
 }
 
-func (s *AuthService) Logout(ctx context.Context, accessToken, refreshToken string) error {
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	if refreshToken == "" {
 		return nil
 	}
@@ -178,7 +185,15 @@ func (s *AuthService) Logout(ctx context.Context, accessToken, refreshToken stri
 }
 
 func (s *AuthService) LogoutAll(ctx context.Context, userID uuid.UUID) error {
-	return s.querier.IncrementUserTokenVersion(ctx, userID)
+	err := s.querier.IncrementUserTokenVersion(ctx, userID)
+
+	if err != nil {
+		return err
+	}
+	cacheKey := CACHE_KEY + userID.String()
+	_ = s.cache.Delete(ctx, cacheKey)
+
+	return nil
 }
 
 func (s *AuthService) ValidateToken(
@@ -189,22 +204,7 @@ func (s *AuthService) ValidateToken(
 	claims, err := s.jwtManager.ValidateToken(
 		ctx,
 		tokenStr,
-		func(ctx context.Context, userID string) (int, error) {
-			id, err := uuid.Parse(userID)
-			if err != nil {
-				return 0, jwt.ErrTokenInvalid
-			}
-
-			user, err := s.querier.GetUserById(ctx, id)
-			if err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					return 0, jwt.ErrTokenInvalid
-				}
-				return 0, err
-			}
-
-			return int(user.TokenVersion), nil
-		},
+		s.getUserTokenVersion,
 	)
 
 	if err != nil {
@@ -212,4 +212,46 @@ func (s *AuthService) ValidateToken(
 	}
 
 	return claims, nil
+}
+
+func (s *AuthService) getUserTokenVersion(ctx context.Context, userID string) (int, error) {
+	cacheKey := CACHE_KEY + userID
+
+	// try cache
+	if val, found, err := s.cache.Get(ctx, cacheKey); err == nil && found {
+		v, err := strconv.Atoi(val)
+		if err == nil {
+			return v, nil
+		}
+	}
+
+	// prevent stampede
+	v, err, _ := s.sf.Do(cacheKey, func() (any, error) {
+		if val, found, err := s.cache.Get(ctx, cacheKey); err == nil && found {
+			if v, err := strconv.Atoi(val); err == nil {
+				return v, nil
+			}
+		}
+
+		// db hit
+		id, err := uuid.Parse(userID)
+		if err != nil {
+			return 0, jwt.ErrTokenInvalid
+		}
+
+		user, err := s.querier.GetUserById(ctx, id)
+		if err != nil {
+			return 0, jwt.ErrTokenInvalid
+		}
+
+		_ = s.cache.Set(ctx, cacheKey, strconv.Itoa(int(user.TokenVersion)), 30*time.Second)
+
+		return int(user.TokenVersion), nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return v.(int), nil
 }

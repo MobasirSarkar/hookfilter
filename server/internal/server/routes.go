@@ -3,9 +3,10 @@ package server
 import (
 	"net/http"
 
+	"github.com/MobasirSarkar/hookfilter/internal/middleware"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chiM "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 )
@@ -13,24 +14,32 @@ import (
 func (s *Server) MountRoutes(router chi.Router) http.Handler {
 
 	// Global middleware
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.RealIP)
+	router.Use(chiM.Logger)
+	router.Use(chiM.Recoverer)
+	router.Use(chiM.RealIP)
 	router.Use(cors.AllowAll().Handler)
 
 	// public / webhook routes
+	router.Get("/health", s.Health)
 	s.IngestRoutes(router)
 	s.RealtimeRoutes(router)
 
-	router.Get("/health", s.Health)
-
 	// private api routes
 	router.Route("/api/v1", func(r chi.Router) {
-		s.PipeRoutes(r)
 		s.AuthRoutes(r)
+		r.Group(func(r chi.Router) {
+			s.ProtectedRotues(r)
+		})
 	})
 
 	return router
+}
+
+func (s *Server) ProtectedRotues(r chi.Router) {
+	r.Use(middleware.JWTMiddleware(s.Dependencies.AuthHandler.Service))
+
+	s.UserRoutes(r)
+	s.PipeRoutes(r)
 }
 
 // PipeRoutes handles CRUD operations for the configuration
@@ -55,22 +64,32 @@ func (s *Server) IngestRoutes(router chi.Router) {
 // RealtimeRoutes handles websocket connections
 func (s *Server) RealtimeRoutes(router chi.Router) {
 	handler := s.Dependencies.WebhookHandler
-
 	router.Route("/ws", func(r chi.Router) {
-		r.Get("/{userID}", handler.Handle)
+		r.Get("/", handler.Handle)
 	})
 }
 
+// AuthRoutes handles auth routes
 func (s *Server) AuthRoutes(router chi.Router) {
 	handler := s.Dependencies.AuthHandler
 
 	router.Route("/auth", func(r chi.Router) {
 		r.Post("/sign-in", handler.LoginUser)
 		r.Post("/sign-up", handler.RegisterUser)
-		r.Post("/google/login", handler.GoogleLogin)
-		r.Post("/google/callback", handler.GoogleCallback)
-		r.Post("/logout", handler.Logout)
-		r.Post("/logout-all", handler.LogoutAll)
+		r.Get("/google/login", handler.GoogleLogin)
+		r.Get("/google/callback", handler.GoogleCallback)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.JWTMiddleware(s.Dependencies.AuthHandler.Service))
+			r.Post("/logout", handler.Logout)
+			r.Post("/logout-all", handler.LogoutAll)
+		})
+	})
+}
+
+func (s *Server) UserRoutes(router chi.Router) {
+	handler := s.Dependencies.UserHandler
+	router.Route("/users", func(r chi.Router) {
+		r.Get("/me", handler.GetProfile)
 	})
 }
 

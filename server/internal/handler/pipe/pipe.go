@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/MobasirSarkar/hookfilter/internal/middleware"
 	"github.com/MobasirSarkar/hookfilter/internal/service/pipe"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
@@ -26,8 +27,14 @@ func NewPipeHandler(serv pipe.Piper, log *logger.Logger) *PipeHandler {
 }
 
 func (h *PipeHandler) CreatePipe(w http.ResponseWriter, r *http.Request) {
-	userIdH := r.Header.Get("X-User-ID")
-	userID, err := uuid.Parse(userIdH)
+	id, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
+			RequestID: uuid.NewString(),
+		})
+		return
+	}
+	userID, err := uuid.Parse(id)
 	if err != nil {
 		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
 			RequestID: uuid.NewString(),
@@ -68,8 +75,14 @@ func (h *PipeHandler) CreatePipe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
-	userIdH := r.Header.Get("X-User-ID")
-	userID, err := uuid.Parse(userIdH)
+	id, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
+			RequestID: uuid.NewString(),
+		})
+		return
+	}
+	userID, err := uuid.Parse(id)
 	if err != nil {
 		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
 			RequestID: uuid.NewString(),
@@ -109,10 +122,16 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PipeHandler) DeletePipe(w http.ResponseWriter, r *http.Request) {
-	userIDH := r.Header.Get("X-User-ID")
-	userID, err := uuid.Parse(userIDH)
+	id, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
+			RequestID: uuid.NewString(),
+		})
+		return
+	}
+	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "Invalid or missing UserID", &response.Metadata{
+		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
