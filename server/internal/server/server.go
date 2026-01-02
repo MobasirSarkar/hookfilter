@@ -61,7 +61,7 @@ func (s *Server) Run() error {
 	defer stop()
 
 	s.Logger.Info("[WORKER] Starting background processor....")
-	s.Dependencies.Worker.Start(ctx)
+	s.Dependencies.Worker.Start(ctx, s.Dependencies.Config.Worker.Concurrency)
 
 	go func() {
 		if err := s.HttpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

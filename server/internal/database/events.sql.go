@@ -38,6 +38,41 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 	return err
 }
 
+const createEventsBatch = `-- name: CreateEventsBatch :exec
+INSERT INTO events (
+    id,
+    pipe_id,
+    status_code,
+    request_payload,
+    transformed_payload
+)
+SELECT
+    unnest($1::uuid[]),
+    unnest($2::uuid[]),
+    unnest($3::int[]),
+    unnest($4::jsonb[]),
+    unnest($5::jsonb[])
+`
+
+type CreateEventsBatchParams struct {
+	Ids                 []uuid.UUID `json:"ids"`
+	PipeIds             []uuid.UUID `json:"pipe_ids"`
+	StatusCodes         []int32     `json:"status_codes"`
+	RequestPayloads     [][]byte    `json:"request_payloads"`
+	TransformedPayloads [][]byte    `json:"transformed_payloads"`
+}
+
+func (q *Queries) CreateEventsBatch(ctx context.Context, arg CreateEventsBatchParams) error {
+	_, err := q.db.Exec(ctx, createEventsBatch,
+		arg.Ids,
+		arg.PipeIds,
+		arg.StatusCodes,
+		arg.RequestPayloads,
+		arg.TransformedPayloads,
+	)
+	return err
+}
+
 const listEvents = `-- name: ListEvents :many
 SELECT id, pipe_id, status_code, request_payload, transformed_payload, created_at FROM events
 WHERE pipe_id = $1

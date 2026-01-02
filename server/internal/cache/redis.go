@@ -15,29 +15,6 @@ var (
 	conTimeout    = 5 * time.Second
 )
 
-type Cacher interface {
-	// standard function
-	Get(ctx context.Context, key string) (string, bool, error)
-	Set(ctx context.Context, key, val string, ttl time.Duration) error
-	Delete(ctx context.Context, key string) error
-
-	// requests counter
-	Incr(ctx context.Context, key string) (int64, error)
-	Expire(ctx context.Context, key string, ttl time.Duration) error
-
-	// queue function
-	QueuePush(ctx context.Context, queue, val string) error
-	QueuePop(ctx context.Context, queue string) (string, error)
-
-	// pub/sub function
-	Publish(ctx context.Context, channel, message string) error
-	Subscribe(ctx context.Context, channel string) (<-chan string, func(), error)
-
-	// lifecycle
-	Ping(ctx context.Context) error
-	Close() error
-}
-
 type RedisCache struct {
 	client *redis.Client
 }
@@ -86,12 +63,57 @@ func (r *RedisCache) Set(ctx context.Context, key, val string, ttl time.Duration
 	return r.client.Set(ctx, key, val, ttl).Err()
 }
 
+func (r *RedisCache) SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	if ttl <= 0 {
+		return false, ErrInvalidTTL
+	}
+
+	res, err := r.client.SetArgs(ctx, key, "1", redis.SetArgs{
+		Mode: "NX",
+		TTL:  ttl,
+	}).Result()
+
+	if err == redis.Nil {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	if res != "OK" {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (r *RedisCache) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, key).Err()
 }
 
 func (r *RedisCache) Incr(ctx context.Context, key string) (int64, error) {
 	return r.client.Incr(ctx, key).Result()
+}
+
+func (r *RedisCache) IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	var incrWithTTL = redis.NewScript(`
+if redis.call("EXISTS", KEYS[1]) == 0 then
+  redis.call("SET", KEYS[1], 1, "PX", ARGV[1])
+  return 1
+else
+  return redis.call("INCR", KEYS[1])
+end
+`)
+	if ttl <= 0 {
+		return 0, ErrInvalidTTL
+	}
+	res, err := incrWithTTL.Run(ctx, r.client, []string{key}, ttl.Milliseconds()).Result()
+	if err != nil {
+		return 0, err
+	}
+	return res.(int64), nil
+
 }
 func (r *RedisCache) Expire(ctx context.Context, key string, ttl time.Duration) error {
 	return r.client.Expire(ctx, key, ttl).Err()
@@ -101,7 +123,7 @@ func (r *RedisCache) QueuePush(ctx context.Context, queue, val string) error {
 	return r.client.LPush(ctx, queue, val).Err()
 }
 
-func (r *RedisCache) QueuePop(ctx context.Context, queue string) (string, error) {
+func (r *RedisCache) QueueBlockingPop(ctx context.Context, queue string) (string, error) {
 	results, err := r.client.BRPop(ctx, 1*time.Second, queue).Result()
 	if err == redis.Nil {
 		return "", ErrQueueEmpty
@@ -110,6 +132,17 @@ func (r *RedisCache) QueuePop(ctx context.Context, queue string) (string, error)
 		return "", err
 	}
 	return results[1], nil
+}
+
+func (r *RedisCache) QueueTryPop(ctx context.Context, queue string) (string, bool, error) {
+	val, err := r.client.RPop(ctx, queue).Result()
+	if err == redis.Nil {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return val, true, nil
 }
 
 // Publish sends a message to a channel (e.g., "events:user_123").
@@ -132,20 +165,33 @@ func (r *RedisCache) Subscribe(ctx context.Context, channel string) (<-chan stri
 	}
 
 	// create a go channel to pipe data to the caller
-	msgChan := make(chan string)
+	msgChan := make(chan string, 16)
 
 	// start a background goroutine to pump messages from redis to go channel
 	go func() {
+		defer close(msgChan)
+
 		ch := pubsub.Channel()
-		for msg := range ch {
-			msgChan <- msg.Payload
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				select {
+				case msgChan <- msg.Payload:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
 		}
-		close(msgChan)
 	}()
 
 	// define the cleanup function (closure)
 	closFunc := func() {
-		pubsub.Close()
+		_ = pubsub.Close()
 	}
 
 	return msgChan, closFunc, nil

@@ -27,6 +27,7 @@ type Dependency struct {
 	AuthHandler    *auth.AuthHandler
 	UserHandler    *user.UserHandler
 	Worker         *worker.Runner
+	Config         *config.Config
 }
 
 func NewDependency(ctx context.Context) (*Dependency, error) {
@@ -65,7 +66,7 @@ func NewDependency(ctx context.Context) (*Dependency, error) {
 
 	userHandler := user.NewUserHandler(servicer.UserService)
 
-	workerRunner := worker.NewRunner(cache, querier, 5, logger)
+	workerRunner := worker.NewRunner(cache, querier, 5, logger, cfg)
 
 	return &Dependency{
 		Cache:          cache,
@@ -76,5 +77,6 @@ func NewDependency(ctx context.Context) (*Dependency, error) {
 		AuthHandler:    authHandler,
 		UserHandler:    userHandler,
 		Worker:         workerRunner,
+		Config:         cfg,
 	}, nil
 }

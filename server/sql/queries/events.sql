@@ -11,3 +11,19 @@ SELECT * FROM events
 WHERE pipe_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+
+-- name: CreateEventsBatch :exec
+INSERT INTO events (
+    id,
+    pipe_id,
+    status_code,
+    request_payload,
+    transformed_payload
+)
+SELECT
+    unnest(@ids::uuid[]),
+    unnest(@pipe_ids::uuid[]),
+    unnest(@status_codes::int[]),
+    unnest(@request_payloads::jsonb[]),
+    unnest(@transformed_payloads::jsonb[]);

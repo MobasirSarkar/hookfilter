@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CreateEvent(ctx context.Context, arg CreateEventParams) error
+	CreateEventsBatch(ctx context.Context, arg CreateEventsBatchParams) error
 	CreatePipe(ctx context.Context, arg CreatePipeParams) error
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error

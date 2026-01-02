@@ -10,9 +10,12 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/service/pipe"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
+	"github.com/MobasirSarkar/hookfilter/pkg/validator"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
+
+var validate = validator.Validator()
 
 type PipeHandler struct {
 	Service pipe.Piper
@@ -36,14 +39,20 @@ func (h *PipeHandler) CreatePipe(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
 	}
 	var req PipeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid body", &response.Metadata{
+		response.Error(w, http.StatusBadRequest, "Invalid request format", &response.Metadata{
+			RequestID: uuid.NewString(),
+		})
+		return
+	}
+	if err := validate.Struct(req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request format", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -84,7 +93,7 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -101,7 +110,7 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 
 	pipes, err := h.Service.ListPipeByUser(r.Context(), userID, int32(page), int32(limit))
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "failed to fetch pipes", &response.Metadata{
+		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -131,7 +140,7 @@ func (h *PipeHandler) DeletePipe(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "Invalid user ID", &response.Metadata{
+		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -139,7 +148,7 @@ func (h *PipeHandler) DeletePipe(w http.ResponseWriter, r *http.Request) {
 	pipeIDStr := chi.URLParam(r, "pipeID")
 	pipeID, err := uuid.Parse(pipeIDStr)
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid Pipe Id", &response.Metadata{
+		response.Error(w, http.StatusBadRequest, "invalid request params", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -151,7 +160,7 @@ func (h *PipeHandler) DeletePipe(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to delete pipe", &response.Metadata{
+		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return

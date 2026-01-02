@@ -46,6 +46,14 @@ type Config struct {
 		ClientSecret string
 		RedirectUrl  string
 	}
+
+	Aes struct {
+		EncryptionKey string
+	}
+
+	Worker struct {
+		Concurrency int
+	}
 }
 
 func Load() (*Config, error) {
@@ -78,6 +86,10 @@ func Load() (*Config, error) {
 	cfg.GoogleOauth.ClientID = utils.GetEnv("GOOGLE_CLIENT_ID", "")
 	cfg.GoogleOauth.ClientSecret = utils.GetEnv("GOOGLE_CLIENT_SECRET", "")
 	cfg.GoogleOauth.RedirectUrl = utils.GetEnv("GOOGLE_REDIRECT_URL", "")
+
+	cfg.Aes.EncryptionKey = utils.GetEnv("ENCRYPTION_KEY", "")
+
+	cfg.Worker.Concurrency = utils.GetEnvInt("CONCURRENCY_WORKERS", 4)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -122,7 +134,11 @@ func (c *Config) Validate() error {
 	}
 
 	if c.GoogleOauth.RedirectUrl == "" {
-		return errors.New("GOOGLE_REDIRECT_URL")
+		return errors.New("GOOGLE_REDIRECT_URL is required.")
+	}
+
+	if c.Aes.EncryptionKey == "" {
+		return errors.New("ENCRYPTION_KEY is required")
 	}
 
 	return nil

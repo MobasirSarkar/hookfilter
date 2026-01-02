@@ -11,6 +11,7 @@ import (
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
 	"github.com/MobasirSarkar/hookfilter/pkg/utils"
+	"github.com/MobasirSarkar/hookfilter/pkg/validator"
 	"github.com/google/uuid"
 )
 
@@ -18,6 +19,8 @@ const (
 	OAUTH_STATE_KEY = "oauth_state"
 	COOKIE_KEY      = "refresh_token"
 )
+
+var validate = validator.Validator()
 
 type AuthHandler struct {
 	Service  auth.IdentityService
@@ -41,8 +44,9 @@ func (h *AuthHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if req.Email == "" || req.Password == "" || req.Username == "" {
-		response.Error(w, http.StatusBadRequest, "missing required fields", &response.Metadata{
+
+	if err := validate.Struct(req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request format", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -79,7 +83,7 @@ func (h *AuthHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/refresh",
 		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
 	})
 
@@ -96,9 +100,8 @@ func (h *AuthHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	if req.Email == "" || req.Password == "" {
-		response.Error(w, http.StatusBadRequest, "missing required fields", &response.Metadata{
+	if err := validate.Struct(req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request format", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
 		return
@@ -133,33 +136,11 @@ func (h *AuthHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/refresh",
 		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
 	})
 
 	response.JSON(w, http.StatusOK, resp, "login successfully", &response.Metadata{
-		RequestID: uuid.NewString(),
-	})
-}
-
-func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
-	state := utils.GenerateGoogleState()
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     OAUTH_STATE_KEY,
-		Value:    state,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/google/callback",
-		MaxAge:   300,
-	})
-	url := h.provider.AuthURL(state)
-	resp := map[string]any{
-		"auth_url": url,
-	}
-
-	response.JSON(w, http.StatusOK, resp, "redirecting", &response.Metadata{
 		RequestID: uuid.NewString(),
 	})
 }
@@ -177,7 +158,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/refresh", // MUST MATCH ORIGINAL
+		Path:     "/api/v1/refresh", // MUST MATCH ORIGINAL
 		MaxAge:   -1,
 	})
 
@@ -226,6 +207,23 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	state := utils.GenerateGoogleState()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     OAUTH_STATE_KEY,
+		Value:    state,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/api/v1/auth",
+		MaxAge:   300,
+	})
+	url := h.provider.AuthURL(state)
+
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
 func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -238,6 +236,12 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cookie, err := r.Cookie(OAUTH_STATE_KEY)
+	if cookie == nil || cookie.Value == "" {
+		response.Error(w, http.StatusUnauthorized, "cookie is empty", &response.Metadata{
+			RequestID: uuid.NewString(),
+		})
+		return
+	}
 	if err != nil || cookie.Value != state {
 		response.Error(w, http.StatusUnauthorized, "invalid oauth callback", &response.Metadata{
 			RequestID: uuid.NewString(),
@@ -270,12 +274,12 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     COOKIE_KEY,
+		Name:     OAUTH_STATE_KEY,
 		Value:    tokens.RefreshToken,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/auth",
 		MaxAge:   int((30 * 24 * time.Hour).Seconds()),
 	})
 

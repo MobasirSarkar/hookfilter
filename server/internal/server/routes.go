@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/MobasirSarkar/hookfilter/internal/middleware"
 	"github.com/MobasirSarkar/hookfilter/pkg/response"
@@ -55,8 +56,8 @@ func (s *Server) PipeRoutes(router chi.Router) {
 // IngestRoutes handles the high-volumes webhook hanlder
 func (s *Server) IngestRoutes(router chi.Router) {
 	handler := s.Dependencies.IngestHandler
-
-	router.Route("/u", func(r chi.Router) {
+	limiter := middleware.RateLimit(s.Dependencies.Cache, 100, time.Minute)
+	router.With(limiter).Route("/u", func(r chi.Router) {
 		r.Post("/{slug}", handler.HandleWebhook)
 	})
 }
@@ -72,14 +73,21 @@ func (s *Server) RealtimeRoutes(router chi.Router) {
 // AuthRoutes handles auth routes
 func (s *Server) AuthRoutes(router chi.Router) {
 	handler := s.Dependencies.AuthHandler
+	cache := s.Dependencies.Cache
+
+	strictLimiter := middleware.RateLimit(cache, 5, time.Minute)
+
+	standardLimiter := middleware.RateLimit(cache, 20, time.Minute)
 
 	router.Route("/auth", func(r chi.Router) {
-		r.Post("/sign-in", handler.LoginUser)
-		r.Post("/sign-up", handler.RegisterUser)
+		r.With(strictLimiter).Post("/sign-in", handler.LoginUser)
+		r.With(strictLimiter).Post("/sign-up", handler.RegisterUser)
 		r.Get("/google/login", handler.GoogleLogin)
 		r.Get("/google/callback", handler.GoogleCallback)
+
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTMiddleware(s.Dependencies.AuthHandler.Service))
+			r.Use(standardLimiter)
 			r.Post("/logout", handler.Logout)
 			r.Post("/logout-all", handler.LogoutAll)
 		})
