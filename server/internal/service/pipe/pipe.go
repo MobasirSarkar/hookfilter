@@ -19,7 +19,7 @@ var (
 
 type Piper interface {
 	CreatePipe(ctx context.Context, params CreatePipeParams) error
-	ListPipeByUser(ctx context.Context, userID uuid.UUID, page, pageSize int32) ([]db.Pipe, error)
+	ListPipeByUser(ctx context.Context, userID uuid.UUID, page, pageSize int32) (int64, []db.Pipe, error)
 	DeletePipe(ctx context.Context, pipeID, userID uuid.UUID) error
 }
 
@@ -70,22 +70,44 @@ func (s *PipeService) CreatePipe(ctx context.Context, params CreatePipeParams) e
 	return nil
 }
 
-func (s *PipeService) ListPipeByUser(ctx context.Context, userID uuid.UUID, page, pageSize int32) ([]db.Pipe, error) {
+func (s *PipeService) ListPipeByUser(
+	ctx context.Context,
+	userID uuid.UUID,
+	page, pageSize int32,
+) (int64, []db.Pipe, error) {
+
+	if page < 1 {
+		page = 1
+	}
+
 	offset := (page - 1) * pageSize
+
+	total, err := s.querier.CountPipesByUser(ctx, userID)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	pipes, err := s.querier.ListPipes(ctx, db.ListPipesParams{
 		UserID: userID,
 		Limit:  pageSize,
 		Offset: offset,
 	})
 	if err != nil {
-		return []db.Pipe{}, err
+		return 0, nil, err
 	}
+
 	for i := range pipes {
-		decrypted, _ := encryption.Decrypt(pipes[i].TargetUrl, s.Config.Aes.EncryptionKey)
+		decrypted, err := encryption.Decrypt(
+			pipes[i].TargetUrl,
+			s.Config.Aes.EncryptionKey,
+		)
+		if err != nil {
+			return 0, nil, err
+		}
 		pipes[i].TargetUrl = decrypted
 	}
 
-	return pipes, nil
+	return total, pipes, nil
 }
 
 func (s *PipeService) DeletePipe(ctx context.Context, pipeID, userID uuid.UUID) error {

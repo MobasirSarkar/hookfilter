@@ -108,8 +108,9 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 		limit = 5
 	}
 
-	pipes, err := h.Service.ListPipeByUser(r.Context(), userID, int32(page), int32(limit))
+	totalData, pipes, err := h.Service.ListPipeByUser(r.Context(), userID, int32(page), int32(limit))
 	if err != nil {
+		h.log.Error(err)
 		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
 			RequestID: uuid.NewString(),
 		})
@@ -121,7 +122,7 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 		Page:       int32(page),
 		Pagesize:   int32(limit),
 		Totalpages: int32(totalPage),
-		TotalData:  int32(len(pipes)),
+		TotalData:  int32(totalData),
 	}
 
 	response.JSON(w, http.StatusOK, pipes, "pipe fetched successfully", &response.Metadata{

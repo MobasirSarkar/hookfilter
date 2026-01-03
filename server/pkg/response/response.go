@@ -15,7 +15,7 @@ type Pagination struct {
 }
 
 type Metadata struct {
-	RequestID  string      `json:"requrest_id"`
+	RequestID  string      `json:"request_id"`
 	Pagination *Pagination `json:"pagination"`
 }
 

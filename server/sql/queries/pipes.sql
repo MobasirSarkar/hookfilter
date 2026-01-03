@@ -20,8 +20,11 @@ WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL LIMIT 1;
 
 
 -- name: ListPipes :many
-SELECT * FROM pipes
-WHERE user_id = $1 AND deleted_at IS NULL
+SELECT *
+FROM pipes
+WHERE user_id = $1
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: UpdatePipe :one
@@ -38,4 +41,12 @@ UPDATE pipes
 SET deleted_at = NOW(), is_active = false
 WHERE id = $1 
   AND user_id = $2
+  AND deleted_at IS NULL;
+
+
+
+-- name: CountPipesByUser :one
+SELECT COUNT(*) AS total_count
+FROM pipes
+WHERE user_id = $1
   AND deleted_at IS NULL;

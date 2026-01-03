@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CountPipesByUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateEvent(ctx context.Context, arg CreateEventParams) error
 	CreateEventsBatch(ctx context.Context, arg CreateEventsBatchParams) error
 	CreatePipe(ctx context.Context, arg CreatePipeParams) error

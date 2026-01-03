@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const countPipesByUser = `-- name: CountPipesByUser :one
+SELECT COUNT(*) AS total_count
+FROM pipes
+WHERE user_id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) CountPipesByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPipesByUser, userID)
+	var total_count int64
+	err := row.Scan(&total_count)
+	return total_count, err
+}
+
 const createPipe = `-- name: CreatePipe :exec
 INSERT INTO pipes (
    id, user_id, name, slug, target_url, jq_filter
@@ -116,8 +130,11 @@ func (q *Queries) GetPipeBySlug(ctx context.Context, slug string) (Pipe, error) 
 }
 
 const listPipes = `-- name: ListPipes :many
-SELECT id, user_id, name, slug, target_url, jq_filter, is_active, created_at, updated_at, deleted_at FROM pipes
-WHERE user_id = $1 AND deleted_at IS NULL
+SELECT id, user_id, name, slug, target_url, jq_filter, is_active, created_at, updated_at, deleted_at
+FROM pipes
+WHERE user_id = $1
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
 
