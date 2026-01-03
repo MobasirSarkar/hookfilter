@@ -5,9 +5,7 @@ import {
     flexRender,
     getCoreRowModel,
     useReactTable,
-    getPaginationRowModel,
     SortingState,
-    getSortedRowModel,
     PaginationState,
     OnChangeFn,
 } from "@tanstack/react-table"
@@ -55,16 +53,18 @@ export function DataTable<TData, TValue>({
         data,
         columns,
         manualPagination: true,
-        pageCount: pagination.total_page,
+        manualSorting: true,
         rowCount: pagination.total_data,
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
+
+        onPaginationChange: handlePaginationChange,
         onSortingChange: setSorting,
-        getSortedRowModel: getSortedRowModel(),
+
         state: {
+            pagination: paginationState,
             sorting,
-            pagination: paginationState
         },
+
+        getCoreRowModel: getCoreRowModel(),
     })
 
     return (
@@ -91,7 +91,6 @@ export function DataTable<TData, TValue>({
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            // SKELETON LOADING STATE
                             <TableRow>
                                 <TableCell colSpan={columns.length} className="h-24 text-center">
                                     Loading data...
@@ -128,10 +127,13 @@ export function DataTable<TData, TValue>({
                 </div>
                 <div className="flex space-x-2">
                     <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => table.previousPage()}
-                        disabled={!table.getCanPreviousPage() || isLoading}
+                        onClick={() =>
+                            handlePaginationChange({
+                                pageIndex: paginationState.pageIndex - 1,
+                                pageSize: paginationState.pageSize,
+                            })
+                        }
+                        disabled={paginationState.pageIndex === 0}
                     >
                         Previous
                     </Button>

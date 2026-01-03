@@ -63,8 +63,9 @@ func Error(w http.ResponseWriter, status int, message string, meta *Metadata) {
 	w.WriteHeader(status)
 
 	resp := Envelope{
-		Success: false,
-		Error:   message,
+		Success:  false,
+		Error:    message,
+		Metadata: meta,
 	}
 
 	json.NewEncoder(w).Encode(resp)
@@ -83,8 +84,9 @@ func Message(w http.ResponseWriter, status int, msg string, meta *Metadata) {
 	w.WriteHeader(status)
 
 	resp := Envelope{
-		Success: true,
-		Message: msg,
+		Success:  true,
+		Message:  msg,
+		Metadata: meta,
 	}
 
 	json.NewEncoder(w).Encode(resp)

@@ -160,15 +160,24 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 		return "", "", ErrInvalidToken
 	}
 
+	user, err := s.querier.GetUserById(ctx, rt.UserID)
+	if err != nil {
+		return "", "", err
+	}
+
+	if err := s.querier.RevokeRefreshToken(ctx, rt.ID); err != nil {
+		return "", "", err
+	}
+	newAccess, newRefresh, err = s.issueTokens(ctx, user)
+	if err != nil {
+		return "", "", err
+	}
+
 	if err := s.querier.RevokeRefreshToken(ctx, rt.ID); err != nil {
 		return "", "", err
 	}
 
-	user, err := s.querier.GetUserById(ctx, rt.UserID)
-	if err != nil {
-		return "", "", nil
-	}
-	return s.issueTokens(ctx, user)
+	return newAccess, newRefresh, nil
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {

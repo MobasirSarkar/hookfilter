@@ -2,11 +2,17 @@ package user
 
 import (
 	"context"
+	"errors"
 
 	db "github.com/MobasirSarkar/hookfilter/internal/database"
 	"github.com/MobasirSarkar/hookfilter/pkg/config"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+)
+
+var (
+	ErrUserNotFound = errors.New("user not found")
 )
 
 type Service interface {
@@ -33,6 +39,9 @@ func (s *UserService) GetProfile(ctx context.Context, userID string) (*UserProfi
 	}
 	user, err := s.Querier.GetUserById(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 

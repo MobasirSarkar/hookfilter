@@ -8,11 +8,13 @@ import (
 	"github.com/MobasirSarkar/hookfilter/pkg/config"
 	"github.com/MobasirSarkar/hookfilter/pkg/encryption"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
 	ErrPipeNotFound = errors.New("pipe not found")
+	ErrInvalidInput = errors.New("invalid input")
 	ErrPipeExists   = errors.New("pipe already exists")
 	UniqueConstCode = "23505"
 )
@@ -21,6 +23,7 @@ type Piper interface {
 	CreatePipe(ctx context.Context, params CreatePipeParams) error
 	ListPipeByUser(ctx context.Context, userID uuid.UUID, page, pageSize int32) (int64, []db.Pipe, error)
 	DeletePipe(ctx context.Context, pipeID, userID uuid.UUID) error
+	GetPipeById(ctx context.Context, pipeID, userID uuid.UUID) (*db.Pipe, error)
 }
 
 type PipeService struct {
@@ -108,6 +111,28 @@ func (s *PipeService) ListPipeByUser(
 	}
 
 	return total, pipes, nil
+}
+
+func (s *PipeService) GetPipeById(ctx context.Context, pipeID, userID uuid.UUID) (*db.Pipe, error) {
+	if pipeID == uuid.Nil || userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	pipe, err := s.querier.GetPipeById(ctx, db.GetPipeByIdParams{
+		ID:     pipeID,
+		UserID: userID,
+	})
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPipeNotFound
+		}
+		return nil, err
+	}
+	decypted, err := encryption.Decrypt(pipe.TargetUrl, s.Config.Aes.EncryptionKey)
+	pipe.TargetUrl = decypted
+
+	return &pipe, nil
 }
 
 func (s *PipeService) DeletePipe(ctx context.Context, pipeID, userID uuid.UUID) error {

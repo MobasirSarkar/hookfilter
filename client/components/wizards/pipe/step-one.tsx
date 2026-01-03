@@ -39,8 +39,6 @@ export default function StepOne() {
                             Set up the identity for your new webhook gateway.
                         </FieldDescription>
 
-                        {/* --- FIELD 1: NAME --- */}
-                        {/* We pass 'data-invalid' to style the field in red on error */}
                         <Field data-invalid={!!errors.name}>
                             <FieldLabel htmlFor="name">Pipe Name</FieldLabel>
                             <Input
@@ -56,7 +54,6 @@ export default function StepOne() {
                             )}
                         </Field>
 
-                        {/* --- FIELD 2: SLUG --- */}
                         <Field data-invalid={!!errors.slug}>
                             <FieldLabel htmlFor="slug">URL Slug</FieldLabel>
                             <Input
@@ -64,7 +61,6 @@ export default function StepOne() {
                                 placeholder="stripe-payments"
                                 {...register("slug")}
                             />
-                            {/* Show Description if no error, otherwise show Error */}
                             {errors.slug ? (
                                 <FieldError>{errors.slug.message}</FieldError>
                             ) : (

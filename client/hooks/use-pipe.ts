@@ -1,36 +1,87 @@
-import { Del, Get, Post } from "@/lib/api/client";
+"use client";
+
+import { useAuth } from "@/context/auth";
+import { useApi } from "@/lib/api/use-api";
 import { pipeKeys } from "@/lib/keys/query";
 import { ApiResponse, Pipe } from "@/lib/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-// fetch
+// Fetch pipes (list)
 export function usePipes(page = 1, limit = 10) {
+    const api = useApi();
+    const { accessToken } = useAuth();
+    console.log(accessToken);
+
     return useQuery({
         queryKey: [...pipeKeys.lists(), page, limit],
-        queryFn: () =>
-            Get<ApiResponse<Pipe[]>>(`/pipes?page=${page}&limit=${limit}`),
-        placeholderData: (previousData) => previousData,
+        enabled: !!accessToken,
+        queryFn: async () => {
+            const res = await api.get<ApiResponse<Pipe[]>>(
+                `/pipes?page=${page}&limit=${limit}`,
+            );
+
+            if (!res.status || !res.data) {
+                throw new Error(
+                    res.error || res.message || "Failed to fetch pipes",
+                );
+            }
+
+            return {
+                pipes: res.data,
+                pagination: res.metadata?.pagination ?? {
+                    page,
+                    page_size: limit,
+                    total_page: 0,
+                    total_data: 0,
+                },
+            };
+        },
+        gcTime: 0,
     });
 }
 
 export function usePipe(id: string) {
+    const api = useApi();
+
     return useQuery({
         queryKey: pipeKeys.detail(id),
-        queryFn: () => Get<Pipe[]>(`/pipes/${id}`),
         enabled: !!id,
+        queryFn: async () => {
+            const res = await api.get<ApiResponse<Pipe>>(`/pipes/${id}`);
+
+            if (!res.status || !res.data) {
+                throw new Error(res.error || res.message || "Pipe not found");
+            }
+
+            return res.data;
+        },
     });
 }
 
 export function useCreatePipe() {
+    const api = useApi();
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (newPipe: {
+        mutationFn: async (newPipe: {
             name: string;
             slug: string;
             target_url: string;
-        }) => Post<Pipe, typeof newPipe>("/pipes", newPipe),
+        }) => {
+            const res = await api.post<ApiResponse<Pipe>, typeof newPipe>(
+                "/pipes",
+                newPipe,
+            );
+
+            if (!res.status || !res.data) {
+                throw new Error(
+                    res.error || res.message || "Failed to create pipe",
+                );
+            }
+
+            return res.data;
+        },
 
         onSuccess: () => {
             toast.success("Pipe created successfully");
@@ -44,11 +95,23 @@ export function useCreatePipe() {
 }
 
 export function useDeletePipe() {
+    const api = useApi();
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (pipeId: string) =>
-            Del<{ success: boolean }>(`/api/pipes/${pipeId}`),
+        mutationFn: async (pipeId: string) => {
+            const res = await api.del<ApiResponse<{ success: boolean }>>(
+                `/pipes/${pipeId}`,
+            );
+
+            if (!res.status) {
+                throw new Error(
+                    res.error || res.message || "Failed to delete pipe",
+                );
+            }
+
+            return true;
+        },
 
         onSuccess: () => {
             toast.success("Pipe deleted");

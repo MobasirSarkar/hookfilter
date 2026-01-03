@@ -8,6 +8,7 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/handler/auth"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/ingest"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/pipe"
+	"github.com/MobasirSarkar/hookfilter/internal/handler/playground"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/user"
 	"github.com/MobasirSarkar/hookfilter/internal/handler/webhook"
 	"github.com/MobasirSarkar/hookfilter/internal/service"
@@ -19,15 +20,16 @@ import (
 )
 
 type Dependency struct {
-	Cache          *cache.RedisCache
-	Db             *pgxpool.Pool
-	PipeHandler    *pipe.PipeHandler
-	IngestHandler  *ingest.IngestHandler
-	WebhookHandler *webhook.RealtimeHandler
-	AuthHandler    *auth.AuthHandler
-	UserHandler    *user.UserHandler
-	Worker         *worker.Runner
-	Config         *config.Config
+	Cache             *cache.RedisCache
+	Db                *pgxpool.Pool
+	PipeHandler       *pipe.PipeHandler
+	IngestHandler     *ingest.IngestHandler
+	WebhookHandler    *webhook.RealtimeHandler
+	AuthHandler       *auth.AuthHandler
+	UserHandler       *user.UserHandler
+	PlaygroundHandler *playground.PlaygroundHandler
+	Worker            *worker.Runner
+	Config            *config.Config
 }
 
 func NewDependency(ctx context.Context) (*Dependency, error) {
@@ -64,19 +66,21 @@ func NewDependency(ctx context.Context) (*Dependency, error) {
 	googleProvider := gp.NewGoogleProvider(cfg)
 	authHandler := auth.NewAuthHandler(servicer.AuthService, googleProvider, logger)
 
-	userHandler := user.NewUserHandler(servicer.UserService)
+	userHandler := user.NewUserHandler(servicer.UserService, logger)
+	playgroundHandler := playground.NewPlaygroundHandler(logger)
 
 	workerRunner := worker.NewRunner(cache, querier, 5, logger, cfg)
 
 	return &Dependency{
-		Cache:          cache,
-		Db:             dbConn,
-		WebhookHandler: webhookHandler,
-		PipeHandler:    pipeHandler,
-		IngestHandler:  ingestHandler,
-		AuthHandler:    authHandler,
-		UserHandler:    userHandler,
-		Worker:         workerRunner,
-		Config:         cfg,
+		Cache:             cache,
+		Db:                dbConn,
+		WebhookHandler:    webhookHandler,
+		PipeHandler:       pipeHandler,
+		IngestHandler:     ingestHandler,
+		AuthHandler:       authHandler,
+		UserHandler:       userHandler,
+		PlaygroundHandler: playgroundHandler,
+		Worker:            workerRunner,
+		Config:            cfg,
 	}, nil
 }

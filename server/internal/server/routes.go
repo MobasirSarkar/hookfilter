@@ -34,6 +34,7 @@ func (s *Server) MountRoutes(router chi.Router) http.Handler {
 
 	// private api routes
 	router.Route("/api/v1", func(r chi.Router) {
+		s.PublicRoutes(r)
 		s.AuthRoutes(r)
 		r.Group(func(r chi.Router) {
 			s.ProtectedRotues(r)
@@ -48,6 +49,11 @@ func (s *Server) ProtectedRotues(r chi.Router) {
 
 	s.UserRoutes(r)
 	s.PipeRoutes(r)
+
+}
+
+func (s *Server) PublicRoutes(r chi.Router) {
+	s.PlaygroundRoutes(r)
 }
 
 // PipeRoutes handles CRUD operations for the configuration
@@ -56,6 +62,7 @@ func (s *Server) PipeRoutes(router chi.Router) {
 	router.Route("/pipes", func(r chi.Router) {
 		r.Post("/", handler.CreatePipe)
 		r.Get("/", handler.ListPipes)
+		r.Get("/{pipeID}", handler.GetPipeByID)
 		r.Delete("/{pipeID}", handler.DeletePipe)
 	})
 }
@@ -83,14 +90,15 @@ func (s *Server) AuthRoutes(router chi.Router) {
 	cache := s.Dependencies.Cache
 
 	strictLimiter := middleware.RateLimit(cache, 5, time.Minute)
-
 	standardLimiter := middleware.RateLimit(cache, 20, time.Minute)
+	refreshLimiter := middleware.RateLimit(cache, 60, time.Minute)
 
 	router.Route("/auth", func(r chi.Router) {
 		r.With(strictLimiter).Post("/sign-in", handler.LoginUser)
 		r.With(strictLimiter).Post("/sign-up", handler.RegisterUser)
 		r.Get("/google/login", handler.GoogleLogin)
 		r.Get("/google/callback", handler.GoogleCallback)
+		r.With(refreshLimiter).Post("/refresh", handler.Refresh)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTMiddleware(s.Dependencies.AuthHandler.Service))
@@ -105,6 +113,16 @@ func (s *Server) UserRoutes(router chi.Router) {
 	handler := s.Dependencies.UserHandler
 	router.Route("/users", func(r chi.Router) {
 		r.Get("/me", handler.GetProfile)
+	})
+}
+
+func (s *Server) PlaygroundRoutes(router chi.Router) {
+	handler := s.Dependencies.PlaygroundHandler
+	cache := s.Dependencies.Cache
+	standardLimiter := middleware.RateLimit(cache, 20, time.Minute)
+	router.Route("/jq", func(r chi.Router) {
+		r.Use(standardLimiter)
+		r.Post("/playground", handler.HandlePlayground)
 	})
 }
 

@@ -9,14 +9,14 @@ export default function PipesPage() {
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
 
-    const { data: response, isLoading, isError } = usePipes(page, pageSize)
+    const { data, isLoading, isError } = usePipes(page, pageSize)
 
-    const pipes = response?.data || [];
+    const pipes = data?.pipes ?? []
 
-    const pagination = response?.metadata?.pagination || {
+    const pagination = data?.pagination ?? {
         page: page,
         page_size: pageSize,
-        total_page: 0,
+        total_page: 1,
         total_data: 0
     }
 

@@ -35,13 +35,12 @@ func New() *Server {
 		panic(err)
 	}
 
-	router := chi.NewRouter()
-
 	server := &Server{
 		Dependencies: dependencies,
 		Logger:       log,
 	}
 
+	router := chi.NewRouter()
 	server.MountRoutes(router)
 
 	server.HttpServer = &http.Server{

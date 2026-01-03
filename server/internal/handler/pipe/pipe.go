@@ -30,31 +30,26 @@ func NewPipeHandler(serv pipe.Piper, log *logger.Logger) *PipeHandler {
 }
 
 func (h *PipeHandler) CreatePipe(w http.ResponseWriter, r *http.Request) {
+	meta := &response.Metadata{RequestID: uuid.NewString()}
+
+	// userID
 	id, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	var req PipeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request format", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusBadRequest, "Invalid request format", meta)
 		return
 	}
 	if err := validate.Struct(req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request format", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusBadRequest, "invalid request format", meta)
 		return
 	}
 	err = h.Service.CreatePipe(r.Context(), pipe.CreatePipeParams{
@@ -65,37 +60,29 @@ func (h *PipeHandler) CreatePipe(w http.ResponseWriter, r *http.Request) {
 		JQFilter:  req.JqFilter,
 	})
 	if err != nil {
-		h.log.Errorf("[HANDLER] -> failed to create pipe -> %v", err)
 		if errors.Is(err, pipe.ErrPipeExists) {
-			response.Error(w, http.StatusConflict, "pipe already exists with same slug", &response.Metadata{
-				RequestID: uuid.NewString(),
-			})
+			response.Error(w, http.StatusConflict, "pipe already exists with same slug", meta)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "Internal server error", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		h.log.Errorf("[HANDLER] -> failed to create pipe -> %v", err)
+		response.Error(w, http.StatusInternalServerError, "Internal server error", meta)
 		return
 	}
 
-	response.Message(w, http.StatusCreated, "pipe created successfully", &response.Metadata{
-		RequestID: uuid.NewString(),
-	})
+	response.Message(w, http.StatusCreated, "pipe created successfully", meta)
 }
 
 func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
+	meta := &response.Metadata{RequestID: uuid.NewString()}
+
 	id, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -111,9 +98,7 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 	totalData, pipes, err := h.Service.ListPipeByUser(r.Context(), userID, int32(page), int32(limit))
 	if err != nil {
 		h.log.Error(err)
-		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusInternalServerError, "internal server error", meta)
 		return
 	}
 
@@ -124,50 +109,74 @@ func (h *PipeHandler) ListPipes(w http.ResponseWriter, r *http.Request) {
 		Totalpages: int32(totalPage),
 		TotalData:  int32(totalData),
 	}
+	meta.Pagination = &pagination
 
-	response.JSON(w, http.StatusOK, pipes, "pipe fetched successfully", &response.Metadata{
-		RequestID:  uuid.NewString(),
-		Pagination: &pagination,
-	})
+	response.JSON(w, http.StatusOK, pipes, "pipe fetched successfully", meta)
+}
+
+func (h *PipeHandler) GetPipeByID(w http.ResponseWriter, r *http.Request) {
+	meta := &response.Metadata{RequestID: uuid.NewString()}
+
+	userIDStr, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
+		return
+	}
+
+	pipeIDStr := chi.URLParam(r, "pipeID")
+	pipeID, err := uuid.Parse(pipeIDStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid pipeID", meta)
+		return
+	}
+
+	pipeD, err := h.Service.GetPipeById(r.Context(), pipeID, userID)
+	if err != nil {
+		if errors.Is(err, pipe.ErrPipeNotFound) {
+			response.Error(w, http.StatusNotFound, "pipe not found", meta)
+			return
+		}
+		h.log.Errorf("GetPipeById failed: %v", err)
+		response.Error(w, http.StatusInternalServerError, "internal server error", meta)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, pipeD, "pipe fetched successfully", meta)
 }
 
 func (h *PipeHandler) DeletePipe(w http.ResponseWriter, r *http.Request) {
+	meta := &response.Metadata{RequestID: uuid.NewString()}
+
 	id, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	userID, err := uuid.Parse(id)
 	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusUnauthorized, "unauthorized", meta)
 		return
 	}
 	pipeIDStr := chi.URLParam(r, "pipeID")
 	pipeID, err := uuid.Parse(pipeIDStr)
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request params", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusBadRequest, "invalid request params", meta)
 		return
 	}
 	if err := h.Service.DeletePipe(r.Context(), pipeID, userID); err != nil {
 		if errors.Is(err, pipe.ErrPipeNotFound) {
-			response.Error(w, http.StatusNotFound, "pipe not found", &response.Metadata{
-				RequestID: uuid.NewString(),
-			})
+			response.Error(w, http.StatusNotFound, "pipe not found", meta)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "internal server error", &response.Metadata{
-			RequestID: uuid.NewString(),
-		})
+		response.Error(w, http.StatusInternalServerError, "internal server error", meta)
 		return
 	}
 
-	response.Message(w, http.StatusOK, "Pipe delete successfully", &response.Metadata{
-		RequestID: uuid.NewString(),
-	})
+	response.Message(w, http.StatusOK, "Pipe delete successfully", meta)
 }
