@@ -8,6 +8,7 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/cache"
 	db "github.com/MobasirSarkar/hookfilter/internal/database"
 	"github.com/MobasirSarkar/hookfilter/internal/model"
+	"github.com/google/uuid"
 )
 
 const (
@@ -37,6 +38,7 @@ func (s *IngestService) ProcessWebhook(ctx context.Context, slug string, payload
 	}
 
 	task := model.WorkerTask{
+		EventID:   uuid.NewString(),
 		PipeID:    pipe.ID,
 		UserID:    pipe.UserID,
 		TargetURL: pipe.TargetUrl,

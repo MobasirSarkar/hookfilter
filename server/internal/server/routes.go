@@ -89,7 +89,8 @@ func (s *Server) AuthRoutes(router chi.Router) {
 	handler := s.Dependencies.AuthHandler
 	cache := s.Dependencies.Cache
 
-	strictLimiter := middleware.RateLimit(cache, 5, time.Minute)
+	// set to 5
+	strictLimiter := middleware.RateLimit(cache, 100, time.Minute)
 	standardLimiter := middleware.RateLimit(cache, 20, time.Minute)
 	refreshLimiter := middleware.RateLimit(cache, 60, time.Minute)
 

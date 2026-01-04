@@ -260,15 +260,15 @@ func (r *Runner) recordEvent(ctx context.Context, task model.WorkerTask, status 
 }
 
 func (r *Runner) publishRealtimeUpdate(ctx context.Context, task model.WorkerTask, status int, data any) {
-	update := map[string]any{
-		"pipe_id":     task.PipeID,
-		"status_code": status,
-		"timestamp":   time.Now(),
-		"data":        data,
+	evnt := model.RealtimeEvent{
+		ID:           task.EventID,
+		PipeID:       task.PipeID.String(),
+		StatusCode:   status,
+		ReceivedAt:   time.Now(),
+		Payload:      task.Payload,
+		ResponseBody: data,
 	}
-
-	msg, _ := json.Marshal(update)
-
+	msg, _ := json.Marshal(evnt)
 	channel := fmt.Sprintf("%s:%s", PUBLISH_CHANNE_KEY, task.UserID.String())
 
 	if err := r.cache.Publish(ctx, channel, string(msg)); err != nil {

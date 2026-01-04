@@ -24,7 +24,7 @@ func NewServicer(db db.Querier, cache cache.Cacher, cfg *config.Config) *Service
 	jwtManager := jwt.NewJWTManager(cfg)
 	ingestService := ingest.NewIngestService(db, cache)
 	realtimeService := realtime.NewRealtimeService(cache)
-	pipeLineService := pipe.NewPipeService(db, cfg)
+	pipeLineService := pipe.NewPipeService(db, cfg, cache)
 	authService := auth.NewAuthService(db, jwtManager, cfg, cache)
 	userService := user.NewUserService(db, cfg)
 

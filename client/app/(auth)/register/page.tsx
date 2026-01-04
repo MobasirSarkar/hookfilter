@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Card,
     CardContent,
@@ -16,46 +15,42 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth";
-import { useLogin } from "@/hooks/use-auth";
+import { useRegister } from "@/hooks/use-auth";
+import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { useForm } from "react-hook-form";
+import { RegisterForm, RegisterFormSchema } from "@/lib/schema/auth";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 
 export default function LoginPage() {
     const router = useRouter();
     const { setAccessToken, setUser } = useAuth();
 
-    const login = useLogin();
+    const registerUser = useRegister();
 
-    const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+    } = useForm<RegisterForm>({
+        resolver: zodResolver(RegisterFormSchema),
+    });
 
-        const formData = new FormData(event.currentTarget);
-        const payload = Object.fromEntries(formData) as {
-            email: string;
-            password: string;
-        };
-
-        login.mutate(payload, {
+    const onSubmit = (values: RegisterForm) => {
+        registerUser.mutate(values, {
             onSuccess: async (accessToken) => {
-                // 1️⃣ Store token in memory
                 setAccessToken(accessToken);
-
                 try {
-                    // 2️⃣ Fetch current user
                     const res = await fetch("/users/me", {
                         headers: {
                             Authorization: `Bearer ${accessToken}`,
                         },
                     });
-
                     const json = await res.json();
-
                     if (!json.status || !json.data) {
                         throw new Error("Failed to fetch user");
                     }
-
-                    // 3️⃣ Store user
                     setUser(json.data);
-
                     toast.success("Logged in successfully");
                     router.push("/pipes");
                 } catch (err: any) {
@@ -76,41 +71,66 @@ export default function LoginPage() {
                     </CardDescription>
                 </CardHeader>
 
-                <form onSubmit={onSubmit}>
+                <form onSubmit={handleSubmit(onSubmit)}>
                     <CardContent>
-                        <div className="grid w-full items-center gap-4">
-                            <div className="flex flex-col space-y-1.5">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    placeholder="name@example.com"
-                                    required
-                                />
-                            </div>
+                        <FieldGroup>
+                            {/* Email */}
+                            <Field>
+                                <FieldLabel>Email</FieldLabel>
+                                <FieldContent>
+                                    <Input
+                                        type="email"
+                                        autoComplete="email"
+                                        placeholder="name@example.com"
+                                        {...register("email")}
+                                    />
+                                </FieldContent>
+                                {errors.email && (
+                                    <FieldError>{errors.email.message}</FieldError>
+                                )}
+                            </Field>
 
-                            <div className="flex flex-col space-y-1.5">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    name="password"
-                                    type="password"
-                                    required
-                                />
-                            </div>
-                        </div>
+                            {/* Username */}
+                            <Field>
+                                <FieldLabel>Username</FieldLabel>
+                                <FieldContent>
+                                    <Input
+                                        type="text"
+                                        placeholder="John Doe"
+                                        {...register("username")}
+                                    />
+                                </FieldContent>
+                                {errors.email && (
+                                    <FieldError>{errors.email.message}</FieldError>
+                                )}
+                            </Field>
+
+                            {/* Password */}
+                            <Field>
+                                <FieldLabel>Password</FieldLabel>
+                                <FieldContent>
+                                    <Input
+                                        type="password"
+                                        autoComplete="current-password"
+                                        {...register("password")}
+                                    />
+                                </FieldContent>
+                                {errors.password && (
+                                    <FieldError>{errors.password.message}</FieldError>
+                                )}
+                            </Field>
+                        </FieldGroup>
                     </CardContent>
 
                     <CardFooter className="flex flex-col gap-2">
-                        <Button className="w-full" disabled={login.isPending}>
-                            {login.isPending ? "Logging in..." : "Login"}
+                        <Button className="w-full" disabled={registerUser.isPending}>
+                            {registerUser.isPending ? "Registering..." : "Register"}
                         </Button>
 
                         <p className="text-xs text-center text-muted-foreground mt-2">
-                            Don&apos;t have an account?{" "}
-                            <Link href="/register" className="underline">
-                                Register
+                            Already have an account?{" "}
+                            <Link href="/login" className="underline">
+                                Login
                             </Link>
                         </p>
                     </CardFooter>

@@ -12,7 +12,7 @@ export function useProfile(enabled: boolean) {
         queryFn: async () => {
             const res = await api.get<ApiResponse<User>>("/users/me");
 
-            if (!res.status || !res.data) {
+            if (!res.success || !res.data) {
                 throw new Error(
                     res.error || res.message || "failed to fetch user",
                 );

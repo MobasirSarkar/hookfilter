@@ -23,3 +23,7 @@ export type RegisterForm = z.infer<typeof RegisterFormSchema>;
 export interface LoginResponse {
     access_token: string;
 }
+
+export interface RegisterResponse {
+    access_token: string;
+}

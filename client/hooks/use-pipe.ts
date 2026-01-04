@@ -11,7 +11,6 @@ import { toast } from "sonner";
 export function usePipes(page = 1, limit = 10) {
     const api = useApi();
     const { accessToken } = useAuth();
-    console.log(accessToken);
 
     return useQuery({
         queryKey: [...pipeKeys.lists(), page, limit],
@@ -21,7 +20,7 @@ export function usePipes(page = 1, limit = 10) {
                 `/pipes?page=${page}&limit=${limit}`,
             );
 
-            if (!res.status || !res.data) {
+            if (!res.success || !res.data) {
                 throw new Error(
                     res.error || res.message || "Failed to fetch pipes",
                 );
@@ -50,7 +49,7 @@ export function usePipe(id: string) {
         queryFn: async () => {
             const res = await api.get<ApiResponse<Pipe>>(`/pipes/${id}`);
 
-            if (!res.status || !res.data) {
+            if (!res.success || !res.data) {
                 throw new Error(res.error || res.message || "Pipe not found");
             }
 
@@ -74,7 +73,7 @@ export function useCreatePipe() {
                 newPipe,
             );
 
-            if (!res.status || !res.data) {
+            if (!res.success || !res.data) {
                 throw new Error(
                     res.error || res.message || "Failed to create pipe",
                 );
@@ -104,7 +103,7 @@ export function useDeletePipe() {
                 `/pipes/${pipeId}`,
             );
 
-            if (!res.status) {
+            if (!res.success) {
                 throw new Error(
                     res.error || res.message || "Failed to delete pipe",
                 );

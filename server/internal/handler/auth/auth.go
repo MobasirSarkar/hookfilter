@@ -58,7 +58,7 @@ func (h *AuthHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrUserAlreadyExists):
-			response.Error(w, http.StatusConflict, "user already exists", meta)
+			response.Error(w, http.StatusConflict, "email already in use", meta)
 		default:
 			h.log.Errorf("reqister failed: %v", err)
 			response.Error(w, http.StatusInternalServerError, "internal server error", meta)
@@ -74,7 +74,7 @@ func (h *AuthHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		Name:     COOKIE_KEY,
 		Value:    tokens.RefreshToken,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/api/v1/auth/refresh",
 		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
@@ -121,7 +121,7 @@ func (h *AuthHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		Name:     COOKIE_KEY,
 		Value:    tokens.RefreshToken,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/api/v1/auth/refresh",
 		MaxAge:   int(30 * 24 * time.Hour.Seconds()),
@@ -143,7 +143,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Name:     COOKIE_KEY,
 		Value:    "",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/api/v1/auth/refresh", // MUST MATCH ORIGINAL
 		MaxAge:   -1,
@@ -178,9 +178,9 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		Name:     COOKIE_KEY,
 		Value:    "",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/auth/refresh",
 		MaxAge:   -1,
 	})
 
@@ -207,7 +207,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			Path:     "/api/v1/auth/refresh",
 			MaxAge:   -1,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   false,
 			SameSite: http.SameSiteLaxMode,
 		})
 
@@ -220,7 +220,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Name:     COOKIE_KEY,
 		Value:    newRefresh,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/api/v1/auth/refresh",
 		MaxAge:   int((30 * 24 * time.Hour).Seconds()),
@@ -291,13 +291,24 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "login failed", meta)
 		return
 	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     OAUTH_STATE_KEY,
+		Value:    "",
+		Path:     "/api/v1/auth",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     COOKIE_KEY,
 		Value:    tokens.RefreshToken,
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/api/v1/auth",
+		Path:     "/api/v1/auth/refresh",
 		MaxAge:   int((30 * 24 * time.Hour).Seconds()),
 	})
 

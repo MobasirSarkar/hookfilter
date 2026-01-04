@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
     DropdownMenu,
@@ -7,50 +7,70 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useRouter } from "next/navigation"
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { User } from "@/lib/schema/user";
+import { useRouter } from "next/navigation";
 
-export function UserNav() {
-    const router = useRouter()
+interface UserNavProps {
+    user: User;
+}
+
+export function UserNav({ user }: UserNavProps) {
+    const router = useRouter();
 
     const handleLogout = () => {
-        localStorage.removeItem("access_token")
-        router.push("/login")
-    }
+        // TODO:
+        // 1. call POST /auth/logout
+        // 2. clear auth context
+        // 3. redirect to /login
+    };
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src="/avatars/01.png" alt="@user" />
-                        <AvatarFallback>U</AvatarFallback>
+                        <AvatarImage src={user.avatar_url ?? ""} alt={user.username} />
+                        <AvatarFallback>
+                            {user.username?.[0]?.toUpperCase() ?? "U"}
+                        </AvatarFallback>
                     </Avatar>
                 </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">User</p>
+                        <p className="text-sm font-medium leading-none">
+                            {user.username}
+                        </p>
                         <p className="text-xs leading-none text-muted-foreground">
-                            user@example.com
+                            {user.email}
                         </p>
                     </div>
                 </DropdownMenuLabel>
+
                 <DropdownMenuSeparator />
+
                 <DropdownMenuItem onClick={() => router.push("/settings")}>
                     Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/settings")}>
+
+                <DropdownMenuItem onClick={() => router.push("/billing")}>
                     Billing
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-500 cursor-pointer">
+
+                <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="text-red-500 cursor-pointer"
+                >
                     Log out
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
-    )
+    );
 }

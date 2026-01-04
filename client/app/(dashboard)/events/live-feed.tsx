@@ -2,56 +2,93 @@
 
 import { useEffect, useState, useRef } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from "@/components/ui/sheet"
 import { StatusBadge } from "./status-badge"
 import { PayloadViewer } from "./payload-viewer"
 import { format } from "date-fns"
 
-// Define the shape of a WebEvent based on your Go struct
 interface WebEvent {
     id: string
-    status: "success" | "failed" | "pending" | "processing"
+    pipe_id: string
+    status_code: number
     received_at: string
     payload: any
-    response_body?: string
-    response_status?: number
-    attempt_count: number
+    response_body?: any
 }
 
 interface LiveFeedProps {
     pipeId: string
+    token: string
 }
 
-export function LiveFeed({ pipeId }: LiveFeedProps) {
+export function LiveFeed({ pipeId, token }: LiveFeedProps) {
     const [events, setEvents] = useState<WebEvent[]>([])
     const [selectedEvent, setSelectedEvent] = useState<WebEvent | null>(null)
-    const ws = useRef<WebSocket | null>(null)
-    const token = localStorage.getItem("access_token")
-    useEffect(() => {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-        const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`
-        ws.current = new WebSocket(wsUrl)
+    const wsRef = useRef<WebSocket | null>(null)
 
-        ws.current.onopen = () => {
-            console.log("Connected to Pipe Live Feed")
+    useEffect(() => {
+        if (!token) return
+
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+        const wsUrl = `${protocol}://localhost:8080/ws?token=${token}`
+
+        const ws = new WebSocket(wsUrl)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+            console.log("[WS] connected")
         }
 
-        ws.current.onmessage = (message) => {
+        ws.onmessage = (message) => {
             try {
-                const newEvent: WebEvent = JSON.parse(message.data)
-                setEvents((prev) => [newEvent, ...prev]) // Prepend new events
-            } catch (e) {
-                console.error("Failed to parse WS message", e)
+                const raw = JSON.parse(message.data)
+
+                // 🔒 hard validation
+                if (!raw.id || !raw.received_at || !raw.status_code) return
+
+                const event: WebEvent = {
+                    id: raw.id,
+                    pipe_id: raw.pipe_id,
+                    status_code: raw.status_code,
+                    received_at: raw.received_at,
+                    payload: raw.payload,
+                    response_body: raw.response_body,
+                }
+
+                // optional: filter by pipe
+                if (event.pipe_id !== pipeId) return
+
+                setEvents((prev) => [event, ...prev])
+            } catch (err) {
+                console.error("[WS] invalid message", err)
             }
         }
 
-        ws.current.onclose = () => console.log("Disconnected from Live Feed")
+        ws.onclose = () => {
+            console.log("[WS] disconnected")
+        }
+
+        ws.onerror = (e) => {
+        }
 
         return () => {
-            ws.current?.close()
+            ws.close()
         }
-    }, [pipeId])
+    }, [pipeId, token])
 
     return (
         <>
@@ -59,17 +96,16 @@ export function LiveFeed({ pipeId }: LiveFeedProps) {
                 <Table>
                     <TableHeader className="bg-muted/50 sticky top-0 z-10">
                         <TableRow>
-                            <TableHead className="w-25">Status</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Event ID</TableHead>
                             <TableHead>Time</TableHead>
-                            <TableHead className="text-right">Attempts</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {events.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                                    Waiting for events...
+                                <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                                    Waiting for events…
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -80,16 +116,13 @@ export function LiveFeed({ pipeId }: LiveFeedProps) {
                                     onClick={() => setSelectedEvent(event)}
                                 >
                                     <TableCell>
-                                        <StatusBadge status={event.status} code={event.response_status} />
+                                        <StatusBadge code={event.status_code} status="" />
                                     </TableCell>
                                     <TableCell className="font-mono text-xs text-muted-foreground">
-                                        {event.id.substring(0, 8)}...
+                                        {event.id.slice(0, 8)}…
                                     </TableCell>
-                                    <TableCell className="text-sm">
+                                    <TableCell>
                                         {format(new Date(event.received_at), "HH:mm:ss")}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono">
-                                        {event.attempt_count}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -98,40 +131,33 @@ export function LiveFeed({ pipeId }: LiveFeedProps) {
                 </Table>
             </ScrollArea>
 
-            {/* Side Sheet for Event Details */}
             <Sheet open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
-                <SheetContent className="w-100 sm:w-150 overflow-y-auto">
-                    <SheetHeader className="mb-4">
+                <SheetContent className="w-200 overflow-y-auto p-2">
+                    <SheetHeader>
                         <SheetTitle>Event Details</SheetTitle>
-                        <SheetDescription>
-                            {selectedEvent?.id}
-                        </SheetDescription>
+                        <SheetDescription>{selectedEvent?.id}</SheetDescription>
                     </SheetHeader>
 
                     {selectedEvent && (
-                        <div className="space-y-6">
+                        <div className="space-y-6 mt-4">
                             <div>
-                                <h4 className="text-sm font-medium mb-2">Request Payload</h4>
+                                <h4 className="text-sm font-medium mb-2">Payload</h4>
                                 <PayloadViewer data={selectedEvent.payload} />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-muted p-3 rounded-md">
-                                    <span className="text-xs text-muted-foreground">Status Code</span>
-                                    <p className="font-mono text-lg">{selectedEvent.response_status || "N/A"}</p>
-                                </div>
-                                <div className="bg-muted p-3 rounded-md">
-                                    <span className="text-xs text-muted-foreground">Attempts</span>
-                                    <p className="font-mono text-lg">{selectedEvent.attempt_count}</p>
-                                </div>
+                            <div className="bg-muted p-3 rounded-md">
+                                <span className="text-xs text-muted-foreground">Status Code</span>
+                                <p className="font-mono text-lg">
+                                    {selectedEvent.status_code}
+                                </p>
                             </div>
 
                             {selectedEvent.response_body && (
                                 <div>
-                                    <h4 className="text-sm font-medium mb-2">Response Body</h4>
-                                    <div className="bg-muted p-3 rounded-md text-xs font-mono wrap-break-word whitespace-pre-wrap border">
-                                        {selectedEvent.response_body}
-                                    </div>
+                                    <h4 className="text-sm font-medium mb-2">Response</h4>
+                                    <pre className="bg-muted p-3 rounded-md text-xs whitespace-pre-wrap">
+                                        {JSON.stringify(selectedEvent.response_body, null, 2)}
+                                    </pre>
                                 </div>
                             )}
                         </div>

@@ -29,6 +29,7 @@ interface DataTableProps<TData, TValue> {
     isLoading?: boolean
     pagination: Pagination
     onPageChange: (newPage: number, newPageSize: number) => void
+    onRowClick?: (row: TData) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -36,7 +37,8 @@ export function DataTable<TData, TValue>({
     data,
     isLoading,
     pagination,
-    onPageChange
+    onPageChange,
+    onRowClick
 }: DataTableProps<TData, TValue>) {
     const [sorting, setSorting] = useState<SortingState>([])
 
@@ -73,7 +75,10 @@ export function DataTable<TData, TValue>({
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
+                            <TableRow
+                                key={headerGroup.id}
+                            >
+
                                 {headerGroup.headers.map((header) => {
                                     return (
                                         <TableHead key={header.id}>
@@ -101,6 +106,8 @@ export function DataTable<TData, TValue>({
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && "selected"}
+                                    className={onRowClick ? "cursor-pointer hover:bg-muted" : ""}
+                                    onClick={() => onRowClick?.(row.original)}
                                 >
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>

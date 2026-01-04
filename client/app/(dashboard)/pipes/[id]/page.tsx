@@ -7,8 +7,15 @@ import { Separator } from "@/components/ui/separator"
 import { usePipe } from "@/hooks/use-pipe" // Importing your hook
 import { CopyCurlButton } from "../copy-curl-button"
 import { LiveFeed } from "../../events/live-feed"
+import { useAuth } from "@/context/auth"
+import { PipeDetailsSkeleton } from "@/components/skeleton/pipeDetails"
 
 export default function PipeDetailsPage() {
+    const { authReady, accessToken } = useAuth()
+
+    if (!authReady && accessToken === null) {
+        return <PipeDetailsSkeleton />
+    }
     const { id } = useParams()
 
     const { data: response, isLoading, isError } = usePipe(id as string)
@@ -69,7 +76,7 @@ export default function PipeDetailsPage() {
                     </CardHeader>
                     <CardContent className="flex-1 min-h-0 p-0">
                         {/* Pass pipe ID to subscribe to WS channel */}
-                        <LiveFeed pipeId={pipe.id} />
+                        <LiveFeed pipeId={pipe.id} token={accessToken || ""} />
                     </CardContent>
                 </Card>
 

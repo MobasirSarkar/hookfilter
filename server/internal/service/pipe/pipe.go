@@ -2,14 +2,19 @@ package pipe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
+	"github.com/MobasirSarkar/hookfilter/internal/cache"
 	db "github.com/MobasirSarkar/hookfilter/internal/database"
 	"github.com/MobasirSarkar/hookfilter/pkg/config"
 	"github.com/MobasirSarkar/hookfilter/pkg/encryption"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"golang.org/x/sync/singleflight"
 )
 
 var (
@@ -29,12 +34,16 @@ type Piper interface {
 type PipeService struct {
 	querier db.Querier
 	Config  *config.Config
+	cache   cache.Cacher
+
+	group singleflight.Group
 }
 
-func NewPipeService(db db.Querier, cfg *config.Config) *PipeService {
+func NewPipeService(db db.Querier, cfg *config.Config, cache cache.Cacher) *PipeService {
 	return &PipeService{
 		querier: db,
 		Config:  cfg,
+		cache:   cache,
 	}
 }
 
@@ -83,34 +92,67 @@ func (s *PipeService) ListPipeByUser(
 		page = 1
 	}
 
-	offset := (page - 1) * pageSize
+	cacheKey := fmt.Sprintf("pipes:%s:page:%d:size:%d", userID.String(), page, pageSize)
 
-	total, err := s.querier.CountPipesByUser(ctx, userID)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	pipes, err := s.querier.ListPipes(ctx, db.ListPipesParams{
-		UserID: userID,
-		Limit:  pageSize,
-		Offset: offset,
-	})
-	if err != nil {
-		return 0, nil, err
-	}
-
-	for i := range pipes {
-		decrypted, err := encryption.Decrypt(
-			pipes[i].TargetUrl,
-			s.Config.Aes.EncryptionKey,
-		)
-		if err != nil {
-			return 0, nil, err
+	// cache
+	if raw, ok, err := s.cache.Get(ctx, cacheKey); err == nil && ok {
+		var cached cachedPipeList
+		if err := json.Unmarshal([]byte(raw), &cached); err == nil {
+			return cached.Total, cached.Pipes, nil
 		}
-		pipes[i].TargetUrl = decrypted
 	}
 
-	return total, pipes, nil
+	// stampede protection
+	v, err, _ := s.group.Do(cacheKey, func() (any, error) {
+		if raw, ok, err := s.cache.Get(ctx, cacheKey); err == nil && ok {
+			var cached cachedPipeList
+			if err := json.Unmarshal([]byte(raw), &cached); err == nil {
+				return cached, nil
+			}
+		}
+
+		offset := (page - 1) * pageSize
+
+		total, err := s.querier.CountPipesByUser(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		pipes, err := s.querier.ListPipes(ctx, db.ListPipesParams{
+			UserID: userID,
+			Limit:  pageSize,
+			Offset: offset,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for i := range pipes {
+			decrypted, err := encryption.Decrypt(
+				pipes[i].TargetUrl,
+				s.Config.Aes.EncryptionKey,
+			)
+			if err != nil {
+				return nil, err
+			}
+			pipes[i].TargetUrl = decrypted
+		}
+		payload := cachedPipeList{
+			Total: total,
+			Pipes: pipes,
+		}
+
+		if b, err := json.Marshal(payload); err == nil {
+			_ = s.cache.Set(ctx, cacheKey, string(b), 30*time.Second)
+		}
+		return payload, nil
+	})
+
+	if err != nil {
+		return 0, nil, err
+	}
+	result := v.(cachedPipeList)
+	return result.Total, result.Pipes, nil
 }
 
 func (s *PipeService) GetPipeById(ctx context.Context, pipeID, userID uuid.UUID) (*db.Pipe, error) {

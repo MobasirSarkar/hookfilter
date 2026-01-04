@@ -2,7 +2,7 @@
 
 import { Toaster } from "sonner";
 import type { User } from "@/lib/schema/user";
-import Providers from "@/app/providers";
+import Providers from "@/provider/providers";
 import { AuthProvider } from "@/context/auth";
 
 export default function ClientProviders({

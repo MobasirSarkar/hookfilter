@@ -1,6 +1,9 @@
 package pipe
 
-import "github.com/google/uuid"
+import (
+	db "github.com/MobasirSarkar/hookfilter/internal/database"
+	"github.com/google/uuid"
+)
 
 type CreatePipeParams struct {
 	UserID    uuid.UUID
@@ -8,4 +11,9 @@ type CreatePipeParams struct {
 	Slug      string
 	TargetUrl string
 	JQFilter  string
+}
+
+type cachedPipeList struct {
+	Total int64     `json:"total"`
+	Pipes []db.Pipe `json:"pipes"`
 }

@@ -2,7 +2,7 @@ export interface ApiResponse<T> {
     data?: T;
     error?: string;
     message?: string;
-    status: boolean;
+    success: boolean;
     metadata?: {
         request_id: string;
         pagination: Pagination;

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,15 +27,16 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/context/auth";
 import { useLogin } from "@/hooks/use-auth";
-import { useProfile } from "@/hooks/use-profile";
+import { useApi } from "@/lib/api/use-api";
 import { LoginFormSchema, type LoginForm } from "@/lib/schema/auth";
+import type { ApiResponse } from "@/lib/types";
+import type { User } from "@/lib/schema/user";
 
 export default function LoginPage() {
     const router = useRouter();
-    const { accessToken, setAccessToken, setUser, user } = useAuth();
-
+    const { setAccessToken, setUser } = useAuth();
+    const api = useApi();
     const login = useLogin();
-    const profile = useProfile(!!accessToken);
 
     const {
         register,
@@ -46,28 +46,25 @@ export default function LoginPage() {
         resolver: zodResolver(LoginFormSchema),
     });
 
-    /* // Redirect once profile is loaded
-    useEffect(() => {
-        if (profile.data && !user) {
-            setUser(profile.data);
-            toast.success("Logged in successfully");
-            router.push("/pipes");
-        }
-    }, [profile.data, user, setUser, router]);
-*/
-    useEffect(() => {
-        console.log("accessToken updated:", accessToken);
-    }, [accessToken]);
-
-    const onSubmit = (values: LoginForm) => {
+    const onSubmit = async (values: LoginForm) => {
         login.mutate(values, {
-            onSuccess: (token) => {
-                setAccessToken(token);
-                toast.success("Logged in successfully");
-                router.push("/pipes");
+            onSuccess: async (token) => {
+                try {
+                    setAccessToken(token);
+                    const res = await api.get<ApiResponse<User>>("/users/me");
+                    if (!res.success || !res.data) {
+                        throw new Error("Failed to fetch user");
+                    }
+                    setUser(res.data);
+                    toast.success("Logged in successfully");
+                    router.replace("/pipes");
+                } catch (err: any) {
+                    toast.error(err.message || "Login failed");
+                }
             },
         });
     };
+
     return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50">
             <Card className="w-90">
@@ -81,7 +78,6 @@ export default function LoginPage() {
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <CardContent>
                         <FieldGroup>
-                            {/* Email */}
                             <Field>
                                 <FieldLabel>Email</FieldLabel>
                                 <FieldContent>
@@ -97,7 +93,6 @@ export default function LoginPage() {
                                 )}
                             </Field>
 
-                            {/* Password */}
                             <Field>
                                 <FieldLabel>Password</FieldLabel>
                                 <FieldContent>
@@ -118,11 +113,9 @@ export default function LoginPage() {
                         <Button
                             type="submit"
                             className="w-full"
-                            disabled={login.isPending || profile.isLoading}
+                            disabled={login.isPending}
                         >
-                            {login.isPending || profile.isLoading
-                                ? "Logging in..."
-                                : "Login"}
+                            {login.isPending ? "Logging in..." : "Login"}
                         </Button>
 
                         <p className="text-xs text-center text-muted-foreground mt-2">
