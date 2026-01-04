@@ -216,3 +216,25 @@ func (q *Queries) UpdatePipe(ctx context.Context, arg UpdatePipeParams) (Pipe, e
 	)
 	return i, err
 }
+
+const verifyPipeOwnership = `-- name: VerifyPipeOwnership :one
+SELECT EXISTS (
+  SELECT 1
+  FROM pipes
+  WHERE id = $1
+    AND user_id = $2
+    AND deleted_at IS NULL
+)
+`
+
+type VerifyPipeOwnershipParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) VerifyPipeOwnership(ctx context.Context, arg VerifyPipeOwnershipParams) (bool, error) {
+	row := q.db.QueryRow(ctx, verifyPipeOwnership, arg.ID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}

@@ -50,3 +50,13 @@ SELECT COUNT(*) AS total_count
 FROM pipes
 WHERE user_id = $1
   AND deleted_at IS NULL;
+
+
+-- name: VerifyPipeOwnership :one
+SELECT EXISTS (
+  SELECT 1
+  FROM pipes
+  WHERE id = $1
+    AND user_id = $2
+    AND deleted_at IS NULL
+);

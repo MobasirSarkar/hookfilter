@@ -7,6 +7,7 @@ import { usePipes } from "@/hooks/use-pipe"
 import { DataTableSkeleton } from "@/components/skeleton/dataTable"
 import { ErrorView } from "@/components/shared/error-view"
 import { useRouter } from "next/navigation"
+import StepOne from "@/components/wizards/pipe/step-one"
 
 export default function PipesPage() {
     const router = useRouter();

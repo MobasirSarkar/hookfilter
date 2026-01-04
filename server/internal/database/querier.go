@@ -32,6 +32,7 @@ type Querier interface {
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
 	UpdatePipe(ctx context.Context, arg UpdatePipeParams) (Pipe, error)
+	VerifyPipeOwnership(ctx context.Context, arg VerifyPipeOwnershipParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

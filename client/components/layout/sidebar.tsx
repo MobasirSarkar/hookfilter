@@ -1,64 +1,107 @@
 "use client"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
 import { Radio, Code2, Settings } from "lucide-react"
+import { useState } from "react"
+import { Sidebar, SidebarBody, SidebarLink } from "../ui/sidebar"
+import { motion } from "motion/react"
+import { cn } from "@/lib/utils"
+
+interface SideBarWrapperProps {
+    AvatarUrl: string | null;
+    children: React.ReactNode
+}
 
 const routes = [
     {
         label: "Pipes",
-        icon: Radio,
+        icon: (
+            <Radio className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
+        ),
         href: "/pipes",
-        color: "text-sky-500",
     },
     {
         label: "Playground",
-        icon: Code2,
+        icon: (
+            <Code2 className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
+        ),
         href: "/playground",
-        color: "text-violet-500",
     },
     {
         label: "Settings",
-        icon: Settings,
+        icon: (
+            <Settings className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
+        ),
         href: "/settings",
-        color: "text-gray-500",
     },
 ]
 
-export function Sidebar() {
-    const pathname = usePathname()
-
+export function SidebarWrapper({ AvatarUrl, children }: SideBarWrapperProps) {
+    const [open, setOpen] = useState(false);
     return (
-        <div className="space-y-4 py-4 flex flex-col h-full bg-[#111827] text-white">
-            <div className="px-3 py-2 flex-1">
-                <Link href="/pipes" className="flex items-center pl-3 mb-14">
-                    <div className="relative w-8 h-8 mr-4">
-                        {/* Logo placeholder */}
-                        <div className="bg-white rounded-full w-full h-full flex items-center justify-center text-black font-bold">
-                            H
+        <div
+            className={cn(
+                "mx-auto flex w-full flex-1 flex-col overflow-hidden rounded-md border border-neutral-500 bg-gray-50 md:flex-row dark:border-neutral-700 dark:bg-neutral-800",
+                "h-screen",
+            )}
+        >
+            <Sidebar open={open} setOpen={setOpen}>
+                <SidebarBody className="jusitfy-between gap-10">
+                    <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                        {open ? <Logo /> : <LogoIcon />}
+                        <div className="mt-8 flex flex-col gap-2">
+                            {routes.map((link, idx) => (
+                                <SidebarLink key={idx} link={link} />
+                            ))}
                         </div>
                     </div>
-                    <h1 className="text-2xl font-bold">HookFilter</h1>
-                </Link>
-                <div className="space-y-1">
-                    {routes.map((route) => (
-                        <Link
-                            key={route.href}
-                            href={route.href}
-                            className={cn(
-                                "text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition",
-                                pathname.startsWith(route.href) ? "text-white bg-white/10" : "text-zinc-400"
-                            )}
-                        >
-                            <div className="flex items-center flex-1">
-                                <route.icon className={cn("h-5 w-5 mr-3", route.color)} />
-                                {route.label}
-                            </div>
-                        </Link>
-                    ))}
-                </div>
-            </div>
-        </div>
+                    <div>
+                        <SidebarLink
+                            link={{
+                                label: "HookFilter",
+                                href: "#",
+                                icon: (
+                                    <img
+                                        src={AvatarUrl!}
+                                        className="h-7 w-7 shrink-0 rounded-full"
+                                        width={50}
+                                        height={50}
+                                        alt="Avatar"
+                                    />
+                                ),
+                            }}
+                        />
+                    </div>
+                </SidebarBody>
+            </Sidebar>
+            {children}
+        </div >
     )
 }
+
+export const Logo = () => {
+    return (
+        <a
+            href="#"
+            className="relative z-20 flex items-center space-x-2 py-1 text-sm font-normal text-black"
+        >
+            <div className="h-5 w-6 shrink-0 rounded-tl-lg rounded-tr-sm rounded-br-lg rounded-bl-sm bg-black dark:bg-white" />
+            <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="font-medium whitespace-pre text-black dark:text-white"
+            >
+                HookFilter
+            </motion.span>
+        </a>
+    );
+};
+export const LogoIcon = () => {
+    return (
+        <a
+            href="#"
+            className="relative z-20 flex items-center space-x-2 py-1 text-sm font-normal text-black"
+        >
+            <div className="h-5 w-6 shrink-0 rounded-tl-lg rounded-tr-sm rounded-br-lg rounded-bl-sm bg-black dark:bg-white" />
+        </a>
+    );
+};

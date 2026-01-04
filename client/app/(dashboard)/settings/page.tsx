@@ -13,13 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { User as UserIcon } from "lucide-react";
 import { useAuth } from "@/context/auth";
-import { DashboardSkeleton } from "@/components/skeleton/dashboard";
+import { SettingsSkeleton } from "@/components/skeleton/settings";
 
 export default function SettingsPage() {
     const { authReady, user } = useAuth();
 
     if (!authReady || !user) return (
-        <DashboardSkeleton />
+        <SettingsSkeleton />
     );
 
     return (

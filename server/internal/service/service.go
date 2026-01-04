@@ -23,7 +23,7 @@ type Service struct {
 func NewServicer(db db.Querier, cache cache.Cacher, cfg *config.Config) *Service {
 	jwtManager := jwt.NewJWTManager(cfg)
 	ingestService := ingest.NewIngestService(db, cache)
-	realtimeService := realtime.NewRealtimeService(cache)
+	realtimeService := realtime.NewRealtimeService(cache, db)
 	pipeLineService := pipe.NewPipeService(db, cfg, cache)
 	authService := auth.NewAuthService(db, jwtManager, cfg, cache)
 	userService := user.NewUserService(db, cfg)

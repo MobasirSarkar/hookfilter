@@ -9,6 +9,8 @@ import (
 	"github.com/MobasirSarkar/hookfilter/internal/service/auth"
 	"github.com/MobasirSarkar/hookfilter/internal/service/realtime"
 	"github.com/MobasirSarkar/hookfilter/pkg/logger"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -57,16 +59,36 @@ func (h *RealtimeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Identity comes ONLY from JWT
-	userID := claims.UserID
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	pipeIDStr := chi.URLParam(r, "pipeId")
+	pipeID, err := uuid.Parse(pipeIDStr)
+	if err != nil {
+		http.Error(w, "invalid pipe id", http.StatusBadRequest)
+		return
+	}
+	ok, err := h.Service.VerifyPipeOwnership(
+		r.Context(),
+		pipeID,
+		userID,
+	)
+	if err != nil || !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.log.Errorf("[HANDLER] -> websocket upgrade failed -> %v", err)
 		return
 	}
+
 	defer conn.Close()
 
-	msgs, closeSub, err := h.Service.SubscribeToUserEvents(r.Context(), userID)
+	msgs, closeSub, err := h.Service.SubscribeToPipeEvents(r.Context(), pipeID.String())
 	if err != nil {
 		h.log.Errorf("[HANDLER] -> subscription failed -> %v", err)
 		return

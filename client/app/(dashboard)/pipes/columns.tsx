@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button"
 // Strict Type Safety: This column def ONLY accepts 'Pipe' objects
 export const columns: ColumnDef<Pipe>[] = [
     {
+        accessorKey: "id",
+        header: "Sr No.",
+        cell: ({ row }) => (
+            <div className="px-2">
+                {row.index + 1}
+            </div>
+        )
+    },
+    {
         accessorKey: "name",
         header: "Name",
     },
@@ -24,7 +33,6 @@ export const columns: ColumnDef<Pipe>[] = [
         accessorKey: "target_url",
         header: "Destination",
         cell: ({ row }) => {
-            // Simple masking logic
             const url = row.getValue("target_url") as string
             return <span className="text-gray-500 truncate block w-40">••••••••</span>
         }

@@ -12,8 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { JQEditor } from "../pipes/jq-editor";
-import { PayloadViewer } from "../events/payload-viewer";
+import { JQEditor } from "../(dashboard)/pipes/jq-editor";
+import { PayloadViewer } from "../(dashboard)/events/payload-viewer";
 import { usePlayground } from "@/hooks/use-playground";
 
 export default function PlaygroundPage() {

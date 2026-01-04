@@ -80,7 +80,7 @@ func (s *Server) IngestRoutes(router chi.Router) {
 func (s *Server) RealtimeRoutes(router chi.Router) {
 	handler := s.Dependencies.WebhookHandler
 	router.Route("/ws", func(r chi.Router) {
-		r.Get("/", handler.Handle)
+		r.Get("/pipes/{pipeId}", handler.Handle)
 	})
 }
 

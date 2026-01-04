@@ -24,7 +24,7 @@ const (
 	WEBHOOK_QUEUE_KEY  = "webhook_queue"
 	MAX_CONCURRENCY    = 1
 	MAX_RETRY          = 3
-	PUBLISH_CHANNE_KEY = "events:user"
+	PUBLISH_CHANNE_KEY = "events:pipe"
 	DLQ_QUEUE_KEY      = "webhook:failed"
 )
 
@@ -269,7 +269,7 @@ func (r *Runner) publishRealtimeUpdate(ctx context.Context, task model.WorkerTas
 		ResponseBody: data,
 	}
 	msg, _ := json.Marshal(evnt)
-	channel := fmt.Sprintf("%s:%s", PUBLISH_CHANNE_KEY, task.UserID.String())
+	channel := fmt.Sprintf("%s:%s", PUBLISH_CHANNE_KEY, task.PipeID.String())
 
 	if err := r.cache.Publish(ctx, channel, string(msg)); err != nil {
 		r.log.Warnf("[WORKER] Failed to publish realtime update -> channel %s -> error -%v", channel, err)
