@@ -36,7 +36,9 @@ export function usePipes(page = 1, limit = 10) {
                 },
             };
         },
-        gcTime: 0,
+        placeholderData: (previousData) => previousData,
+        staleTime: 30_000,
+        gcTime: 5 * 60_000,
     });
 }
 
@@ -67,6 +69,44 @@ export function useCreatePipe() {
             name: string;
             slug: string;
             target_url: string;
+            jq_filter?: string;
+        }) => {
+            const res = await api.post<ApiResponse<Pipe>, typeof newPipe>(
+                "/pipes",
+                newPipe,
+            );
+
+            if (!res.success || !res.data) {
+                throw new Error(
+                    res.error || res.message || "Failed to create pipe",
+                );
+            }
+
+            return res.data;
+        },
+
+        onSuccess: () => {
+            toast.success("Pipe created successfully");
+            queryClient.invalidateQueries({ queryKey: pipeKeys.lists() });
+        },
+
+        onError: (error: Error) => {
+            toast.error(error.message);
+        },
+    });
+}
+
+export function useUpdatePipe() {
+    const api = useApi();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (newPipe: {
+            id: string;
+            name: string;
+            slug: string;
+            target_url: string;
+            jq_filter?: string;
         }) => {
             const res = await api.post<ApiResponse<Pipe>, typeof newPipe>(
                 "/pipes",

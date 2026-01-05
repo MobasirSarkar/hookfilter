@@ -40,12 +40,12 @@ export function SidebarWrapper({ AvatarUrl, children }: SideBarWrapperProps) {
     return (
         <div
             className={cn(
-                "mx-auto flex w-full flex-1 flex-col overflow-hidden rounded-md border border-neutral-500 bg-gray-50 md:flex-row dark:border-neutral-700 dark:bg-neutral-800",
+                "mx-auto flex w-full flex-1 flex-col overflow-hidden border border-neutral-500 bg-gray-50 md:flex-row dark:border-neutral-700 dark:bg-neutral-800",
                 "h-screen",
             )}
         >
             <Sidebar open={open} setOpen={setOpen}>
-                <SidebarBody className="jusitfy-between gap-10">
+                <SidebarBody className="jusitfy-between gap-10 max-w-400">
                     <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
                         {open ? <Logo /> : <LogoIcon />}
                         <div className="mt-8 flex flex-col gap-2">
@@ -73,7 +73,9 @@ export function SidebarWrapper({ AvatarUrl, children }: SideBarWrapperProps) {
                     </div>
                 </SidebarBody>
             </Sidebar>
-            {children}
+            <div className="flex flex-1 flex-col overflow-y-auto">
+                {children}
+            </div>
         </div >
     )
 }

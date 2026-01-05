@@ -5,6 +5,7 @@ import { SidebarWrapper } from "@/components/layout/sidebar";
 import { DashboardSkeleton } from "@/components/skeleton/dashboard";
 import { useAuth } from "@/context/auth";
 import { useRouter } from "next/navigation";
+import { PipeBreadcrumbs } from "@/components/shared/navigation/pipe-breadcrumbs";
 
 export default function DashboardLayout({
     children,
@@ -30,7 +31,12 @@ export default function DashboardLayout({
 
     return (
         <SidebarWrapper AvatarUrl={user.avatar_url}>
-            {children}
+            <div className="sticky top-0 z-20 border-b bg-background px-6 py-4">
+                <PipeBreadcrumbs />
+            </div>
+            <div className="px-6 py-6">
+                {children}
+            </div>
         </SidebarWrapper>
     );
 }

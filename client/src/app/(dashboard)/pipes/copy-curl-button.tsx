@@ -38,7 +38,7 @@ export function CopyCurlButton({ slug }: { slug: string }) {
                     Test Payload
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Send Test Event</DialogTitle>
                     <DialogDescription>
